@@ -1,5 +1,7 @@
 """Accounting-period operations serialized against journal posting."""
 
+from typing import Any
+
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
@@ -21,6 +23,7 @@ def _locked_period(db: Session, period: str) -> AccountingPeriod:
     """
     values = {"period": period, "status": PeriodStatus.OPEN.value}
     dialect = db.get_bind().dialect.name
+    statement: Any
     if dialect == "postgresql":
         statement = pg_insert(AccountingPeriod).values(**values)
     elif dialect == "sqlite":
