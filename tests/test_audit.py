@@ -54,7 +54,16 @@ def test_deleting_the_last_audit_row_is_detected_by_sequence_high_water_mark(cfo
     if engine.dialect.name == "sqlite":
         # Simulate a privileged attacker who has already disabled the append-only trigger.
         db.execute(text("DROP TRIGGER IF EXISTS audit_logs_no_delete"))
-    db.execute(text("DELETE FROM audit_logs WHERE seq = :seq"), {"seq": last_seq})
+    elif engine.dialect.name == "postgresql":
+        # A database owner/superuser can disable triggers. Model that threat explicitly:
+        # the runtime ledger_app role cannot do this, but an operator with table ownership can.
+        db.execute(text("ALTER TABLE audit_logs DISABLE TRIGGER audit_logs_append_only"))
+        try:
+            db.execute(text("DELETE FROM audit_logs WHERE seq = :seq"), {"seq": last_seq})
+        finally:
+            db.execute(text("ALTER TABLE audit_logs ENABLE TRIGGER audit_logs_append_only"))
+    if engine.dialect.name != "postgresql":
+        db.execute(text("DELETE FROM audit_logs WHERE seq = :seq"), {"seq": last_seq})
     db.commit()
     result = verify_chain(db)
     assert result["valid"] is False
