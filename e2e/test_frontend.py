@@ -90,7 +90,7 @@ def browser() -> Browser:
 
 
 def sign_in(page: Page, base_url: str, email: str, password: str) -> None:
-    page.goto(base_url, wait_until="networkidle")
+    page.goto(base_url, wait_until="domcontentloaded")
     page.get_by_label("Email").fill(email)
     page.get_by_label("Password").fill(password)
     page.get_by_role("button", name="Sign in").click()
