@@ -2,8 +2,8 @@ import os
 from collections.abc import Iterator
 
 from sqlalchemy import MetaData, create_engine, event
-from sqlalchemy.pool import NullPool
 from sqlalchemy.engine import Engine
+from sqlalchemy.pool import NullPool
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.core.config import settings
