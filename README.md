@@ -97,7 +97,7 @@ Interactive API docs: `http://localhost:8000/docs`
 
 ## Deploying to Vercel
 
-LedgerCore includes a Vercel Python Functions entry point at `api/index.py` and a rewrite that sends browser and API requests through the FastAPI application. The static SPA assets are included in the function bundle. Vercel's serverless runtime uses SQLAlchemy `NullPool` so instances do not retain idle PostgreSQL connections between invocations.
+LedgerCore uses Vercel's native FastAPI framework detection with `app/main.py` as the ASGI entry point; no catch-all rewrite or wrapper function is needed. The SPA assets under `app/static/` are explicitly included in the function bundle and served by FastAPI. Vercel's serverless runtime uses SQLAlchemy `NullPool` so instances do not retain idle PostgreSQL connections between invocations.
 
 **Required setup before the first deployment:**
 
