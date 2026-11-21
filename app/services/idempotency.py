@@ -47,6 +47,7 @@ def begin_request(
         "completed_at": None,
     }
     dialect = db.get_bind().dialect.name
+    statement: Any
     if dialect == "postgresql":
         statement = pg_insert(IdempotencyRecord).values(**values)
     elif dialect == "sqlite":
