@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#102b32">
+  <meta name="description" content="LedgerCore — secure double-entry accounting and a tamper-evident audit trail.">
+  <title>LedgerCore</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <div id="toasts" role="status" aria-live="polite"></div>
+
+  <main id="login" class="login" hidden>
+    <form id="login-form" class="login-card" autocomplete="on">
+      <h1>LedgerCore</h1>
+      <p class="muted">Double-entry books with a tamper-evident audit trail.</p>
+      <label for="login-email">Email</label>
+      <input id="login-email" name="email" type="email" autocomplete="username" aria-describedby="login-error" required>
+      <label for="login-password">Password</label>
+      <input id="login-password" name="password" type="password" autocomplete="current-password" required>
+      <p id="login-error" class="error" role="alert"></p>
+      <button type="submit" class="primary">Sign in</button>
+    </form>
+  </main>
+
+  <div id="shell" class="shell" hidden>
+    <aside class="rail">
+      <div class="brand">LedgerCore</div>
+      <nav id="nav" aria-label="Main"></nav>
+      <div class="rail-foot">
+        <div id="role-banner" class="role-banner" hidden>Read-only access · changes are disabled</div>
+        <div id="proof" class="proof" aria-live="polite">
+          <div class="proof-title">Ledger proof</div>
+          <div class="proof-row"><span>Debits</span><span id="proof-dr">0.00</span></div>
+          <div class="proof-row proof-cr"><span>Credits</span><span id="proof-cr">0.00</span></div>
+          <div id="proof-state" class="proof-state">Checking…</div>
+        </div>
+        <div id="whoami" class="whoami"></div>
+        <button id="logout" type="button" class="ghost">Sign out</button>
+      </div>
+    </aside>
+    <main id="view" tabindex="-1" aria-live="polite" aria-busy="false"></main>
+  </div>
+
+  <script src="/static/app.js" defer></script>
+</body>
+</html>

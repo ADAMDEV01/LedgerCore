@@ -1,0 +1,101 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: ledger
+          POSTGRES_PASSWORD: ledger
+          POSTGRES_DB: ledgercore_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U ledger" --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    env:
+      SECRET_KEY: ci-only-secret-key-ci-only-secret-key-0123456789
+      TEST_DATABASE_URL: postgresql+psycopg://ledger:ledger@localhost:5432/ledgercore_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - run: pip install -r requirements-dev.txt
+      - name: Lint
+        run: ruff check .
+      - name: Type check
+        run: mypy app
+      - name: Dependency security audit
+        run: pip-audit -r requirements-dev.txt
+      - name: Tests (PostgreSQL, coverage gate 85%)
+        run: pytest
+      - name: Migration parity (run as a non-superuser migration role)
+        env:
+          DATABASE_URL: postgresql+psycopg://ledger_migrator:migrator-ci@localhost:5432/ledgercore_migrations
+        run: |
+          PGPASSWORD=ledger psql -h localhost -U ledger -d postgres -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE ledger_migrator LOGIN PASSWORD 'migrator-ci' NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;
+          CREATE DATABASE ledgercore_migrations OWNER ledger;
+          SQL
+          PGPASSWORD=ledger psql -h localhost -U ledger -d ledgercore_migrations -v ON_ERROR_STOP=1 <<'SQL'
+          ALTER SCHEMA public OWNER TO ledger_migrator;
+          REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+          GRANT USAGE, CREATE ON SCHEMA public TO ledger_migrator;
+          SQL
+          alembic upgrade head
+          alembic check
+
+  frontend:
+    runs-on: ubuntu-latest
+    env:
+      SECRET_KEY: ci-only-secret-key-ci-only-secret-key-0123456789
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - run: pip install -r requirements-dev.txt
+      - name: Install Chromium
+        run: python -m playwright install --with-deps chromium
+      - name: Browser tests (Playwright)
+        run: pytest -q e2e -o addopts=''
+      - name: Upload browser screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ledgercore-browser-screenshots
+          path: docs/screenshots/*.png
+          if-no-files-found: ignore
+
+  docker:
+    needs: [test, frontend]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and smoke-test the compose stack
+        run: |
+          printf "SECRET_KEY=%s\nPOSTGRES_PASSWORD=%s\nLEDGER_MIGRATOR_PASSWORD=%s\nLEDGER_APP_PASSWORD=%s\nSEED_DEMO_DATA=true\nENVIRONMENT=production\nCOOKIE_SECURE=true\n" \
+            "$(openssl rand -hex 32)" "$(openssl rand -hex 12)" \
+            "$(openssl rand -hex 24)" "$(openssl rand -hex 24)" > .env
+          docker compose up -d --build
+          for i in $(seq 1 30); do
+            curl -fsS http://localhost:8000/health/ready && break
+            sleep 2
+          done
+          curl -fsS http://localhost:8000/health/ready
+          curl -fsS http://localhost:8000/ | grep -q LedgerCore
+          docker compose logs api | tail -n 20
+          docker compose down -v
