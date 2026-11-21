@@ -94,6 +94,21 @@ Production refuses `COOKIE_SECURE=false`; use HTTPS and keep it `true`.
 
 Interactive API docs: `http://localhost:8000/docs`
 
+
+## Deploying to Vercel
+
+LedgerCore includes a Vercel Python Functions entry point at `api/index.py` and a rewrite that sends browser and API requests through the FastAPI application. The static SPA assets are included in the function bundle. Vercel's serverless runtime uses SQLAlchemy `NullPool` so instances do not retain idle PostgreSQL connections between invocations.
+
+**Required setup before the first deployment:**
+
+1. Create a managed PostgreSQL database (for example, Neon). Use a dedicated `ledger_app` login for the Vercel runtime with DML-only privileges; do not use the bootstrap superuser or migration owner as the runtime credential.
+2. In Vercel Project Settings, set `SECRET_KEY` (at least 32 random characters), `DATABASE_URL` (the runtime `ledger_app` connection string), `ENVIRONMENT=production`, `COOKIE_SECURE=true`, and `SEED_ON_STARTUP=false`. Set `BASE_CURRENCY` if it differs from USD. Optionally set both `DEMO_VIEWER_EMAIL` and `DEMO_VIEWER_PASSWORD` only if a read-only public demo is intended.
+3. Before the first deployment, run Alembic from a trusted workstation or migration runner using the separate `ledger_migrator` connection string as `DATABASE_URL`: `python -m alembic upgrade head`. Do not run migrations from a Vercel function or from every application startup.
+4. Bootstrap the initial CFO exactly once from a trusted environment after migrations, with `DATABASE_URL` set to the migration/administrative connection as required by the seed operations, and `INITIAL_ADMIN_EMAIL` plus a strong `INITIAL_ADMIN_PASSWORD` set: `python scripts/bootstrap.py`. Keep the bootstrap command and credentials out of the public deployment logs and remove temporary credentials from the runner afterward.
+5. Deploy a Preview first. Verify `/health/ready`, login, refresh/logout, role permissions, a balanced journal entry, and the audit verification endpoint before promoting to Production.
+
+The application is not ready for production merely because Vercel builds it: managed PostgreSQL, role provisioning, migrations, one-time administrator bootstrap, and post-deploy financial/authentication checks are operator prerequisites. Do not set `SEED_ON_STARTUP=true` on a multi-instance serverless deployment; concurrent cold starts must not race to seed production data.
+
 ## Screenshots and demo access
 
 The browser suite captures the seeded dashboard and a posted journal entry in `docs/screenshots/`. GitHub Actions uploads these files as the `ledgercore-browser-screenshots` artifact after the Playwright job.
