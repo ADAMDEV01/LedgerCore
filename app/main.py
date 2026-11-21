@@ -1,4 +1,5 @@
 import logging
+import os
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
@@ -27,7 +28,9 @@ logging.basicConfig(level=logging.INFO)
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-    if settings.SEED_ON_STARTUP:
+    # Vercel functions are ephemeral and may cold-start concurrently; production seeding
+    # must be run explicitly once by an operator, never during function startup.
+    if settings.SEED_ON_STARTUP and os.getenv("VERCEL") != "1":
         seed_database()
     yield
 
