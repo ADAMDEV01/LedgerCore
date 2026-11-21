@@ -7,7 +7,6 @@ the migration additionally refuse UPDATE/DELETE outright.
 
 import hashlib
 from datetime import UTC, datetime
-from typing import Optional
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -41,11 +40,12 @@ def compute_hash(
 
 def log_audit(db: Session, actor: str, action: str, entity: str, details: str) -> AuditLog:
     seq = next_value(db, SEQ_AUDIT)
-    prev: Optional[str] = GENESIS_HASH
+    prev: str = GENESIS_HASH
     if seq > 1:
-        prev = db.scalar(select(AuditLog.row_hash).where(AuditLog.seq == seq - 1))
-        if prev is None:
+        previous_hash = db.scalar(select(AuditLog.row_hash).where(AuditLog.seq == seq - 1))
+        if previous_hash is None:
             raise RuntimeError(f"audit chain is broken: missing row {seq - 1}")
+        prev = previous_hash
     now = clock.utcnow()
     row = AuditLog(
         seq=seq,
