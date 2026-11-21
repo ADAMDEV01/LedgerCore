@@ -140,7 +140,7 @@ def test_parallel_expired_requests_share_one_refresh_across_tabs(browser: Browse
     first = context.new_page()
     second = context.new_page()
     sign_in(first, app_url, ADMIN_EMAIL, ADMIN_PASSWORD)
-    second.goto(app_url, wait_until="networkidle")
+    second.goto(app_url, wait_until="domcontentloaded")
     second.get_by_role("heading", name="Dashboard").wait_for()
 
     # Keep the valid refresh/CSRF cookies but expire the access cookie in the shared jar.
@@ -166,8 +166,10 @@ def test_parallel_expired_requests_share_one_refresh_across_tabs(browser: Browse
     for page in (first, second):
         page.evaluate(
             """() => {
-              window.refreshProbe = fetch('/api/v1/accounts', { credentials: 'same-origin' })
-                .then((response) => { window.refreshProbeStatus = response.status; return response.status; });
+              // Exercise the SPA API wrapper so the test covers its refresh-and-retry path.
+              window.refreshProbe = window.api('/accounts')
+                .then(() => { window.refreshProbeStatus = 200; return 200; })
+                .catch(() => { window.refreshProbeStatus = 0; return 0; });
               return true;
             }"""
         )
