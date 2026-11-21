@@ -168,15 +168,14 @@ def test_parallel_expired_requests_share_one_refresh_across_tabs(browser: Browse
             """() => {
               // Exercise the SPA API wrapper so the test covers its refresh-and-retry path.
               window.refreshProbe = window.api('/accounts')
-                .then(() => { window.refreshProbeStatus = 200; return 200; })
-                .catch(() => { window.refreshProbeStatus = 0; return 0; });
+                .then(() => 200)
+                .catch(() => 0);
               return true;
             }"""
         )
-    first.wait_for_function("window.refreshProbeStatus !== undefined", timeout=10000)
-    second.wait_for_function("window.refreshProbeStatus !== undefined", timeout=10000)
-
-    assert first.evaluate("window.refreshProbeStatus") == 200
-    assert second.evaluate("window.refreshProbeStatus") == 200
+    # Playwright's evaluate awaits the Promise; wait_for_function would use eval and
+    # violate the app's intentionally strict script-src CSP.
+    assert first.evaluate("window.refreshProbe") == 200
+    assert second.evaluate("window.refreshProbe") == 200
     assert refresh_requests == 1
     context.close()
