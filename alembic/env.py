@@ -1,7 +1,6 @@
 from logging.config import fileConfig
 
 from alembic import context
-
 from app import models  # noqa: F401  (registers tables on Base.metadata)
 from app.core.config import settings
 from app.core.database import Base, make_engine, normalize_database_url

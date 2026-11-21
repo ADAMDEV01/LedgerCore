@@ -1,13 +1,13 @@
 from pathlib import Path
 
 import pytest
-from alembic import command
 from alembic.autogenerate import compare_metadata
 from alembic.config import Config
 from alembic.migration import MigrationContext
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.exc import DBAPIError
 
+from alembic import command
 from app import models  # noqa: F401
 from app.core.database import Base
 

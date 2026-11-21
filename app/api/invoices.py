@@ -4,7 +4,8 @@ from fastapi import APIRouter, Header, Query
 
 from app.core.deps import CfoUser, CurrentUser, DbSession, LedgerWriter
 from app.schemas import InvoiceCreate, InvoiceDetailOut, InvoiceOut, Page, PaymentCreate
-from app.services import idempotency, invoices as svc
+from app.services import idempotency
+from app.services import invoices as svc
 
 router = APIRouter(prefix="/invoices", tags=["invoices"])
 

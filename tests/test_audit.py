@@ -22,7 +22,7 @@ def test_chain_links_each_row_to_the_previous_hash(cfo, db):
     post_je(cfo, "1000", "3000", "10.00")
     rows = list(db.scalars(select(AuditLog).order_by(AuditLog.seq)))
     assert rows[0].prev_hash == GENESIS_HASH
-    for previous, current in zip(rows, rows[1:]):
+    for previous, current in zip(rows, rows[1:], strict=False):
         assert current.prev_hash == previous.row_hash
         assert current.seq == previous.seq + 1
 

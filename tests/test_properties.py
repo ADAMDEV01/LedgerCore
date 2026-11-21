@@ -57,7 +57,7 @@ def test_installments_always_settle_receivables_exactly(data, total, invoice_rat
     assume(cents >= 2)
     cuts = sorted(data.draw(st.sets(st.integers(1, cents - 1), max_size=5)))
     bounds = [0, *cuts, cents]
-    installments = [Decimal(b - a) / 100 for a, b in zip(bounds, bounds[1:])]
+    installments = [Decimal(b - a) / 100 for a, b in zip(bounds, bounds[1:], strict=False)]
     base_total = money(total * invoice_rate)
 
     paid, settled = Decimal("0"), Decimal("0")
