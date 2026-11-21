@@ -36,6 +36,10 @@ class Settings(BaseSettings):
             raise ValueError("SECRET_KEY still contains the placeholder value")
         if self.ENVIRONMENT == "production" and self.COOKIE_SECURE is False:
             raise ValueError("COOKIE_SECURE=false is not allowed in production")
+        if self.ENVIRONMENT == "production" and not self.DATABASE_URL.startswith(
+            ("postgres://", "postgresql://", "postgresql+psycopg://")
+        ):
+            raise ValueError("Production requires PostgreSQL; SQLite is not supported")
         if bool(self.DEMO_VIEWER_EMAIL) != bool(self.DEMO_VIEWER_PASSWORD):
             raise ValueError("DEMO_VIEWER_EMAIL and DEMO_VIEWER_PASSWORD must be configured together")
         return self
