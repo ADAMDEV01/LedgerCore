@@ -27,35 +27,21 @@ ALTER ROLE ledger_app WITH PASSWORD :'app_password'
   NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
 
 -- Existing installations may have application relations owned by the old `ledger` superuser.
--- Transfer only objects in the dedicated public schema; REASSIGN OWNED also touches
--- database-wide/system objects and is not appropriate for the bootstrap superuser.
-DO $
-DECLARE
-  obj RECORD;
-BEGIN
-  FOR obj IN
-    SELECT c.relkind, c.relname
-      FROM pg_class AS c
-      JOIN pg_namespace AS n ON n.oid = c.relnamespace
-     WHERE n.nspname = 'public'
-       AND c.relowner = (SELECT oid FROM pg_roles WHERE rolname = 'ledger')
-       AND c.relkind IN ('r', 'p', 'S', 'v', 'm', 'f')
-  LOOP
-    CASE obj.relkind
-      WHEN 'S' THEN
-        EXECUTE format('ALTER SEQUENCE public.%I OWNER TO ledger_migrator', obj.relname);
-      WHEN 'v' THEN
-        EXECUTE format('ALTER VIEW public.%I OWNER TO ledger_migrator', obj.relname);
-      WHEN 'm' THEN
-        EXECUTE format('ALTER MATERIALIZED VIEW public.%I OWNER TO ledger_migrator', obj.relname);
-      WHEN 'f' THEN
-        EXECUTE format('ALTER FOREIGN TABLE public.%I OWNER TO ledger_migrator', obj.relname);
-      ELSE
-        EXECUTE format('ALTER TABLE public.%I OWNER TO ledger_migrator', obj.relname);
-    END CASE;
-  END LOOP;
-END
-$;
+-- Transfer only objects in the dedicated public schema; avoid REASSIGN OWNED because it
+-- also attempts to move database-wide/system objects belonging to the bootstrap account.
+SELECT CASE c.relkind
+         WHEN 'S' THEN format('ALTER SEQUENCE public.%I OWNER TO ledger_migrator', c.relname)
+         WHEN 'v' THEN format('ALTER VIEW public.%I OWNER TO ledger_migrator', c.relname)
+         WHEN 'm' THEN format('ALTER MATERIALIZED VIEW public.%I OWNER TO ledger_migrator', c.relname)
+         WHEN 'f' THEN format('ALTER FOREIGN TABLE public.%I OWNER TO ledger_migrator', c.relname)
+         ELSE format('ALTER TABLE public.%I OWNER TO ledger_migrator', c.relname)
+       END
+  FROM pg_class AS c
+  JOIN pg_namespace AS n ON n.oid = c.relnamespace
+ WHERE n.nspname = 'public'
+   AND c.relowner = (SELECT oid FROM pg_roles WHERE rolname = 'ledger')
+   AND c.relkind IN ('r', 'p', 'S', 'v', 'm', 'f')
+\gexec
 ALTER DATABASE ledgercore OWNER TO ledger; -- keep the migrator from owning/dropping the database
 ALTER SCHEMA public OWNER TO ledger_migrator;
 REVOKE CREATE ON SCHEMA public FROM PUBLIC;
