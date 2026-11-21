@@ -113,9 +113,14 @@ The application is not ready for production merely because Vercel builds it: man
 
 The browser suite captures the seeded dashboard and a posted journal entry in `docs/screenshots/`. GitHub Actions uploads these files as the `ledgercore-browser-screenshots` artifact after the Playwright job.
 
-A live URL has not been configured for this source archive. To expose a public read-only demo, set
-`DEMO_VIEWER_EMAIL` and `DEMO_VIEWER_PASSWORD` in the deployment environment. Startup provisions that account with
-`VIEWER` role only; both settings are required together, and there are no shipped demo credentials.
+**Production deployment:** [https://ledgercore-silk.vercel.app](https://ledgercore-silk.vercel.app)
+
+The production app uses a dedicated managed PostgreSQL database. Sign-in is required; the initial CFO account is
+provisioned separately, and no public demo credentials are enabled.
+
+To expose an additional public read-only demo, set `DEMO_VIEWER_EMAIL` and `DEMO_VIEWER_PASSWORD` in the
+deployment environment. Startup provisions that account with `VIEWER` role only; both settings are required
+together, and there are no shipped demo credentials.
 
 ## Testing
 
