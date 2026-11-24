@@ -46,7 +46,9 @@ def upgrade() -> None:
 
     # Backfill every existing account and financial record into one preserved workspace.
     bind = op.get_bind()
-    if bind.dialect.name == "sqlite":
+    if bind.dialect.name in ("postgresql", "sqlite"):
+        # Backfill organization_id on append-only financial/audit rows. Pause database
+        # immutability triggers inside this transaction, then restore them before commit.
         from app.core.db_triggers import drop_append_only_triggers, drop_ledger_integrity_triggers
 
         drop_ledger_integrity_triggers(bind)
@@ -174,11 +176,13 @@ def upgrade() -> None:
                 f"CREATE TRIGGER {table}_tenant_reference_guard BEFORE INSERT ON {table} "
                 f"WHEN {condition} BEGIN SELECT RAISE(ABORT, 'cross-organization reference'); END"
             )
-        from app.core.db_triggers import install_append_only_triggers, install_ledger_integrity_triggers
 
-        install_append_only_triggers(bind)
-        install_ledger_integrity_triggers(bind)
-
+    if bind.dialect.name in ("postgresql", "sqlite"):
+                from app.core.db_triggers import install_append_only_triggers, install_ledger_integrity_triggers
+        
+                install_append_only_triggers(bind)
+                install_ledger_integrity_triggers(bind)
+        
 
 def downgrade() -> None:
     bind = op.get_bind()
