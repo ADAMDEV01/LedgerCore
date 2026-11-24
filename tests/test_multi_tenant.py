@@ -77,3 +77,29 @@ def test_financial_document_sequences_are_independent_per_company():
     assert contoso_invoice.status_code == 201, contoso_invoice.text
     assert northwind_invoice.json()["invoice_number"] == "INV-000001"
     assert contoso_invoice.json()["invoice_number"] == "INV-000001"
+
+
+def test_workspace_cannot_post_a_journal_entry_using_another_company_account():
+    northwind = make_client()
+    contoso = make_client()
+    _register(northwind, "Northwind Studio", "owner@northwind.test")
+    _register(contoso, "Contoso Labs", "owner@contoso.test")
+
+    northwind_accounts = northwind.get(f"{API}/accounts?page_size=500").json()["items"]
+    contoso_accounts = contoso.get(f"{API}/accounts?page_size=500").json()["items"]
+    northwind_cash = next(row["id"] for row in northwind_accounts if row["code"] == "1000")
+    contoso_capital = next(row["id"] for row in contoso_accounts if row["code"] == "3000")
+
+    response = northwind.post(
+        f"{API}/journal-entries",
+        json={
+            "description": "Attempted cross-workspace posting",
+            "entry_date": "2026-11-24",
+            "lines": [
+                {"account_id": northwind_cash, "debit": "50.00", "credit": "0"},
+                {"account_id": contoso_capital, "debit": "0", "credit": "50.00"},
+            ],
+        },
+        headers={"Idempotency-Key": "cross-workspace-entry-0001"},
+    )
+    assert response.status_code == 404
