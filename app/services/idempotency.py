@@ -37,7 +37,9 @@ def begin_request(
     if not 16 <= len(key) <= 255:
         raise ConflictError("Idempotency-Key must contain between 16 and 255 characters")
     request_hash = _fingerprint(payload)
+    organization_id = int(db.info.get("organization_id", 1))
     values = {
+        "organization_id": organization_id,
         "actor": actor,
         "operation": operation,
         "key": key,
@@ -57,7 +59,7 @@ def begin_request(
 
     inserted_id = db.execute(
         statement.on_conflict_do_nothing(
-            index_elements=["actor", "operation", "key"]
+            index_elements=["organization_id", "actor", "operation", "key"]
         ).returning(IdempotencyRecord.id)
     ).scalar_one_or_none()
     record = db.scalar(
