@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends, Request, Response
 import re
 import uuid
 from urllib.parse import urlsplit
+
+from fastapi import APIRouter, Depends, Request, Response
 
 from app.core.config import settings
 from app.core.database import set_tenant_context
@@ -13,11 +14,11 @@ from app.core.deps import (
     DbSession,
     verify_csrf,
 )
+from app.core.enums import Role
 from app.core.errors import AuthenticationError, PermissionDenied
 from app.core.security import create_access_token, new_csrf_token
-from app.schemas import LoginRequest, RegisterRequest, SessionOut, UserOut
 from app.models import Account, DocumentSequence, Organization
-from app.core.enums import Role
+from app.schemas import LoginRequest, RegisterRequest, SessionOut, UserOut
 from app.seed import CHART_OF_ACCOUNTS
 from app.services import auth as auth_service
 
