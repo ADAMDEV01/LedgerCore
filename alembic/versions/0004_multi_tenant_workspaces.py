@@ -38,6 +38,11 @@ def upgrade() -> None:
             "VALUES (1, 'Default Organization', 'default', CURRENT_TIMESTAMP)"
         )
     )
+    if op.get_bind().dialect.name == "postgresql":
+        op.execute(
+            "SELECT setval(pg_get_serial_sequence('organizations', 'id'), "
+            "(SELECT MAX(id) FROM organizations), true)"
+        )
 
     # Backfill every existing account and financial record into one preserved workspace.
     for table in TENANT_TABLES:
