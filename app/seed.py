@@ -146,7 +146,7 @@ def seed_database() -> None:
     with SessionLocal() as db:
         organization = db.get(Organization, 1)
         if organization is None:
-            organization = Organization(id=1, name="Default Organization", slug="default")
+            organization = Organization(name="Default Organization", slug="default")
             db.add(organization)
             db.flush()
         set_tenant_context(db, organization.id)
