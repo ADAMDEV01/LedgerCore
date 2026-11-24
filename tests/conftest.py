@@ -46,13 +46,13 @@ def fresh_database() -> None:
                         "WITH CHECK (organization_id = NULLIF(current_setting('app.current_organization_id', true), '')::integer)"
                     )
                 )
-            connection.execute(
-                text(
-                    "DO $ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'ledger_app') "
-                    "THEN EXECUTE 'CREATE ROLE ledger_app NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT'; "
-                    "END IF; END $$"
+            role_exists = connection.execute(
+                text("SELECT 1 FROM pg_roles WHERE rolname = 'ledger_app'")
+            ).scalar_one_or_none()
+            if role_exists is None:
+                connection.execute(
+                    text("CREATE ROLE ledger_app NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT")
                 )
-            )
             connection.execute(text("GRANT USAGE ON SCHEMA public TO ledger_app"))
             connection.execute(
                 text(
