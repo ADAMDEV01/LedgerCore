@@ -114,7 +114,7 @@ def _scope_tenant_queries(state) -> None:
             )
     elif state.is_update or state.is_delete:
         mapper = state.bind_mapper
-        if mapper is not None and mapper.class_ in tenant_models:
+        if mapper is not None and mapper.class_ in tenant_models + (models.User,):
             state.statement = state.statement.where(mapper.class_.organization_id == organization_id)
 
 
