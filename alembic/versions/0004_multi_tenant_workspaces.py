@@ -209,3 +209,8 @@ def downgrade() -> None:
         with op.batch_alter_table(table) as batch:
             batch.drop_column("organization_id")
     op.drop_table("organizations")
+    if bind.dialect.name == "sqlite":
+        from app.core.db_triggers import install_append_only_triggers, install_ledger_integrity_triggers
+
+        install_append_only_triggers(bind)
+        install_ledger_integrity_triggers(bind)
