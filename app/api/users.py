@@ -12,8 +12,8 @@ router = APIRouter(prefix="/users", tags=["users"])
 
 
 @router.get("", response_model=list[UserOut])
-def list_users(db: DbSession, _: CfoUser) -> list[User]:
-    return list(db.scalars(select(User).order_by(User.id)))
+def list_users(db: DbSession, actor: CfoUser) -> list[User]:
+    return list(db.scalars(select(User).where(User.organization_id == actor.organization_id).order_by(User.id)))
 
 
 @router.post("", response_model=UserOut, status_code=201)
@@ -34,7 +34,7 @@ def create_user(payload: UserCreate, db: DbSession, actor: CfoUser) -> User:
 def update_user(user_id: int, payload: UserUpdate, db: DbSession, actor: CfoUser) -> User:
     if user_id == actor.id:
         raise ConflictError("You cannot change your own role or active status")
-    user = db.get(User, user_id)
+    user = db.scalar(select(User).where(User.id == user_id, User.organization_id == actor.organization_id))
     if user is None:
         raise NotFoundError("User not found")
     changes: list[str] = []

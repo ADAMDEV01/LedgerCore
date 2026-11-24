@@ -28,10 +28,20 @@ MONEY = Numeric(14, 2)
 RATE = Numeric(12, 6)
 
 
+class Organization(Base):
+    __tablename__ = "organizations"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(160))
+    slug: Mapped[str] = mapped_column(String(80), unique=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=clock.utcnow)
+
+
 class User(Base):
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    organization_id: Mapped[int] = mapped_column(ForeignKey("organizations.id"), index=True)
     full_name: Mapped[str] = mapped_column(String(120))
     email: Mapped[str] = mapped_column(String(254), unique=True)
     password_hash: Mapped[str] = mapped_column(String(255))
@@ -68,9 +78,11 @@ class LoginAttempt(Base):
 
 class Account(Base):
     __tablename__ = "accounts"
+    __table_args__ = (UniqueConstraint("organization_id", "code", name="uq_accounts_org_code"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    code: Mapped[str] = mapped_column(String(20), unique=True)
+    organization_id: Mapped[int] = mapped_column(ForeignKey("organizations.id"), index=True)
+    code: Mapped[str] = mapped_column(String(20))
     name: Mapped[str] = mapped_column(String(120))
     account_type: Mapped[str] = mapped_column(String(10))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -83,6 +95,7 @@ class AccountingPeriod(Base):
 
     __tablename__ = "accounting_periods"
 
+    organization_id: Mapped[int] = mapped_column(ForeignKey("organizations.id"), primary_key=True)
     period: Mapped[str] = mapped_column(String(7), primary_key=True)
     status: Mapped[str] = mapped_column(String(10), default=PeriodStatus.OPEN.value)
     closed_by: Mapped[Optional[str]] = mapped_column(String(254))
@@ -92,15 +105,18 @@ class AccountingPeriod(Base):
 class DocumentSequence(Base):
     __tablename__ = "document_sequences"
 
+    organization_id: Mapped[int] = mapped_column(ForeignKey("organizations.id"), primary_key=True)
     name: Mapped[str] = mapped_column(String(30), primary_key=True)
     last_value: Mapped[int] = mapped_column(Integer, default=0)
 
 
 class JournalEntry(Base):
     __tablename__ = "journal_entries"
+    __table_args__ = (UniqueConstraint("organization_id", "reference_no", name="uq_journal_org_reference"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    reference_no: Mapped[str] = mapped_column(String(20), unique=True)
+    organization_id: Mapped[int] = mapped_column(ForeignKey("organizations.id"), index=True)
+    reference_no: Mapped[str] = mapped_column(String(20))
     entry_date: Mapped[date] = mapped_column(Date, index=True)
     accounting_period: Mapped[str] = mapped_column(String(7), index=True)
     description: Mapped[str] = mapped_column(Text)
@@ -122,6 +138,7 @@ class JournalEntrySeal(Base):
 
     __tablename__ = "journal_entry_seals"
 
+    organization_id: Mapped[int] = mapped_column(ForeignKey("organizations.id"), index=True)
     entry_id: Mapped[int] = mapped_column(
         ForeignKey("journal_entries.id", ondelete="RESTRICT"), primary_key=True
     )
@@ -137,6 +154,7 @@ class LedgerLine(Base):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    organization_id: Mapped[int] = mapped_column(ForeignKey("organizations.id"), index=True)
     entry_id: Mapped[int] = mapped_column(ForeignKey("journal_entries.id"), index=True)
     account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id"), index=True)
     debit: Mapped[Decimal] = mapped_column(MONEY, default=Decimal("0.00"))
@@ -148,9 +166,11 @@ class LedgerLine(Base):
 
 class Invoice(Base):
     __tablename__ = "invoices"
+    __table_args__ = (UniqueConstraint("organization_id", "invoice_number", name="uq_invoices_org_number"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    invoice_number: Mapped[str] = mapped_column(String(20), unique=True)
+    organization_id: Mapped[int] = mapped_column(ForeignKey("organizations.id"), index=True)
+    invoice_number: Mapped[str] = mapped_column(String(20))
     client_name: Mapped[str] = mapped_column(String(160))
     client_email: Mapped[Optional[str]] = mapped_column(String(254))
     currency: Mapped[str] = mapped_column(String(3))
@@ -178,6 +198,7 @@ class InvoicePayment(Base):
     __tablename__ = "invoice_payments"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    organization_id: Mapped[int] = mapped_column(ForeignKey("organizations.id"), index=True)
     invoice_id: Mapped[int] = mapped_column(ForeignKey("invoices.id"), index=True)
     journal_entry_id: Mapped[int] = mapped_column(ForeignKey("journal_entries.id"))
     amount: Mapped[Decimal] = mapped_column(MONEY)  # invoice currency
@@ -194,9 +215,11 @@ class AuditLog(Base):
     """Append-only and hash-chained: each row commits to the previous row's hash."""
 
     __tablename__ = "audit_logs"
+    __table_args__ = (UniqueConstraint("organization_id", "seq", name="uq_audit_org_seq"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    seq: Mapped[int] = mapped_column(Integer, unique=True)
+    organization_id: Mapped[int] = mapped_column(ForeignKey("organizations.id"), index=True)
+    seq: Mapped[int] = mapped_column(Integer)
     actor: Mapped[str] = mapped_column(String(254))
     action: Mapped[str] = mapped_column(String(40))
     entity: Mapped[str] = mapped_column(String(60))
@@ -211,11 +234,12 @@ class IdempotencyRecord(Base):
 
     __tablename__ = "idempotency_records"
     __table_args__ = (
-        UniqueConstraint("actor", "operation", "key", name="uq_idempotency_actor_operation_key"),
+        UniqueConstraint("organization_id", "actor", "operation", "key", name="uq_idempotency_org_actor_operation_key"),
         Index("ix_idempotency_records_created_at", "created_at"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    organization_id: Mapped[int] = mapped_column(ForeignKey("organizations.id"), index=True)
     actor: Mapped[str] = mapped_column(String(254))
     operation: Mapped[str] = mapped_column(String(120))
     key: Mapped[str] = mapped_column(String(255))

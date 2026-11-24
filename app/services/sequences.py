@@ -11,16 +11,20 @@ def next_value(db: Session, name: str) -> int:
     transaction ends, so concurrent writers queue up and a rollback also rolls the number back
     (no gaps, no duplicates).
     """
+    organization_id = int(db.info.get("organization_id", 1))
     stmt = (
         update(DocumentSequence)
-        .where(DocumentSequence.name == name)
+        .where(
+            DocumentSequence.organization_id == organization_id,
+            DocumentSequence.name == name,
+        )
         .values(last_value=DocumentSequence.last_value + 1)
         .returning(DocumentSequence.last_value)
         .execution_options(synchronize_session=False)
     )
     value = db.execute(stmt).scalar_one_or_none()
     if value is None:  # first use of this sequence
-        db.add(DocumentSequence(name=name, last_value=1))
+        db.add(DocumentSequence(organization_id=organization_id, name=name, last_value=1))
         db.flush()
         return 1
     return int(value)

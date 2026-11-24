@@ -111,9 +111,9 @@ def test_deactivated_users_lose_access_immediately(cfo):
     assert retry.status_code == 401
 
 
-def test_there_is_no_public_registration_endpoint(anon):
+def test_registration_requires_company_identity_and_strong_password(anon):
     response = anon.post(f"{API}/auth/register", json={"email": "x@ledgertest.io", "password": PASSWORD})
-    assert response.status_code in (404, 405)
+    assert response.status_code == 422
 
 
 def test_production_rejects_insecure_cookie_configuration():

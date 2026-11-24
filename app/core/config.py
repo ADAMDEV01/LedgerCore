@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     APP_NAME: str = "LedgerCore"
-    VERSION: str = "4.0.0"
+    VERSION: str = "4.1.0"
     ENVIRONMENT: Literal["development", "test", "production"] = "development"
 
     # Required: the app refuses to start without a strong key. No default on purpose.

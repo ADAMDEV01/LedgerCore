@@ -12,6 +12,7 @@ Balances are derived, never stored. Ledger rows cannot be edited. The audit trai
 - **Reports.** Trial balance (with CSV export), income statement, balance sheet. Dashboard with monthly revenue vs expenses.
 - **Accounting periods.** The CFO can close a period; postings into a closed period are rejected.
 - **Roles.** `VIEWER` (read), `ACCOUNTANT` (post, invoice, record payments), `CFO` (reverse, void, close periods, manage users, read audit trail).
+- **Multi-tenant workspaces.** Company signup creates an isolated workspace, provisions the first user as CFO, and seeds a company-local chart of accounts. CFOs can add users to their own workspace.
 - **Tamper-evident audit trail.** Every business action is logged and chained with SHA-256; `/audit-logs/verify` recomputes the chain.
 
 ## Architecture
@@ -37,11 +38,11 @@ subclasses (no FastAPI imports), and the database enforces the invariants that m
 | **Deferred PostgreSQL balance constraint**: each journal entry must be sealed and contain at least two lines whose debit and credit totals match at commit. | An application bug or raw SQL cannot commit an incomplete or unbalanced entry. |
 | **Idempotent financial writes**: actor + operation + `Idempotency-Key` + canonical request hash, with the response stored in the same transaction. | A retry after a lost response returns the original result instead of posting twice. |
 | **Reversal uniqueness is a DB constraint** (`UNIQUE(reverses_entry_id)`) | Two concurrent reversals cannot both succeed. |
-| **Gapless numbering** via `UPDATE ... RETURNING` on a sequence row | Invoice and journal numbers have no gaps or duplicates, and roll back with the transaction. |
+| **Gapless per-workspace numbering** via `UPDATE ... RETURNING` on an organization-scoped sequence row | Invoice and journal numbers have no gaps or duplicates, and roll back with the transaction. |
 | **Optimistic locking** (`version_id`) plus `SELECT ... FOR UPDATE` on invoices | Concurrent payments on one invoice cannot corrupt it; the loser gets HTTP 409. |
 | **Final payment clears exactly the remaining base receivable** | Per-payment rounding can never leave a stray cent in A/R. |
 | **OVERDUE is derived** from `due_date`, never stored | No GET endpoint writes to the database; no cron job needed for correctness. |
-| **Hash-chained audit log** under a single sequence lock, checked against a monotonic sequence high-water mark | Edits, gaps, and deletion of the chain tail are detectable; the high-water mark itself cannot be lowered or deleted through ordinary SQL. |
+| **Per-workspace hash-chained audit log** under an organization-scoped sequence lock, checked against a monotonic sequence high-water mark | Edits, gaps, and deletion of the chain tail are detectable; the high-water mark itself cannot be lowered or deleted through ordinary SQL. |
 | **Accounting-period row lock** created even for previously untouched months | Closing a period serializes with the posting check for that same period. |
 
 ## Security model
@@ -51,9 +52,34 @@ subclasses (no FastAPI imports), and the database enforces the invariants that m
 - **Single-use rotating refresh tokens**, stored only as SHA-256 hashes. An atomic conditional update allows one consumer; replay revokes the whole token family, including a concurrent successor.
 - **CSRF protection** with a double-submit token on authenticated write routes and both session endpoints (`/auth/refresh` and `/auth/logout`).
 - **Database-backed login throttling** per email and per IP.
-- **No public registration.** Users are created by a CFO. `SECRET_KEY` has no default and the app refuses to start without a strong one.
+- **Workspace registration.** The first registrant becomes that workspace's CFO; the CFO can create additional users. Registration enforces same-origin submissions in production and requires a 12-character password. `SECRET_KEY` has no default and the app refuses to start without a strong one.
 - **Strict CSP** (`script-src 'self'`), `nosniff`, frame denial, `no-store` on API responses, HSTS in production.
 - The UI builds DOM with `textContent` only, so API data cannot inject markup. CSV export neutralises spreadsheet formula injection.
+
+
+## Multi-tenant workspaces
+
+Each user belongs to one organization. The first user created through **Create a company account**
+is that organization's CFO; the CFO can then create additional users from the Users screen.
+Email addresses remain globally unique.
+
+Financial and operational records carry an `organization_id`. PostgreSQL row-level security
+enforces that scope for accounts, periods, sequences, journals, seals, ledger lines, invoices,
+payments, audit logs, and idempotency records. Request sessions set a transaction-local tenant
+context, while ORM criteria provide an additional application-level guard. Database triggers
+reject cross-organization references between ledger entries, accounts, invoices, and payments.
+
+Migration `0004` creates the default organization and backfills all existing users and financial
+records into it, preserving existing sign-in and ledger history. It also changes document,
+period, audit, and idempotency keys to be organization-local. Apply migrations with the
+`ledger_migrator` role before deploying the application code:
+
+```bash
+alembic upgrade head
+```
+
+The initial registrant receives the CFO role automatically. Email verification and organization
+invitation links are not part of this release; CFO-created users are provisioned directly.
 
 ## Running it
 

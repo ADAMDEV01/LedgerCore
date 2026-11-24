@@ -78,7 +78,7 @@ def verify_chain(db: Session) -> dict[str, object]:
         checked += 1
     # The transactional sequence is an independent high-water mark. It makes deletion of
     # the newest audit row detectable; a hash chain alone cannot see a missing tail row.
-    sequence = db.get(DocumentSequence, SEQ_AUDIT)
+    sequence = db.get(DocumentSequence, (int(db.info.get("organization_id", 1)), SEQ_AUDIT))
     recorded_tail = sequence.last_value if sequence is not None else 0
     if checked != recorded_tail:
         return {"valid": False, "checked": checked, "first_invalid_seq": expected_seq}

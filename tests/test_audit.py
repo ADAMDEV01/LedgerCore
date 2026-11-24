@@ -38,7 +38,7 @@ def test_a_forged_row_is_detected_by_chain_verification(cfo, db):
     count = db.scalar(select(func.count()).select_from(AuditLog))
     db.add(
         AuditLog(
-            seq=count + 1, actor="intruder", action="FORGED", entity="x", details="y",
+            organization_id=1, seq=count + 1, actor="intruder", action="FORGED", entity="x", details="y",
             created_at=clock.utcnow(), prev_hash=GENESIS_HASH, row_hash="f" * 64,
         )
     )
@@ -50,7 +50,7 @@ def test_a_forged_row_is_detected_by_chain_verification(cfo, db):
 
 def test_deleting_the_last_audit_row_is_detected_by_sequence_high_water_mark(cfo, db):
     post_je(cfo, "1000", "3000", "10.00")
-    last_seq = db.get(DocumentSequence, "AUDIT").last_value
+    last_seq = db.get(DocumentSequence, (1, "AUDIT")).last_value
     if engine.dialect.name == "sqlite":
         # Simulate a privileged attacker who has already disabled the append-only trigger.
         db.execute(text("DROP TRIGGER IF EXISTS audit_logs_no_delete"))
@@ -59,7 +59,7 @@ def test_deleting_the_last_audit_row_is_detected_by_sequence_high_water_mark(cfo
         # the runtime ledger_app role cannot do this, but an operator with table ownership can.
         db.execute(text("ALTER TABLE audit_logs DISABLE TRIGGER audit_logs_append_only"))
         try:
-            db.execute(text("DELETE FROM audit_logs WHERE seq = :seq"), {"seq": last_seq})
+            db.execute(text("DELETE FROM audit_logs WHERE organization_id = 1 AND seq = :seq"), {"seq": last_seq})
         finally:
             db.execute(text("ALTER TABLE audit_logs ENABLE TRIGGER audit_logs_append_only"))
     if engine.dialect.name != "postgresql":
@@ -114,8 +114,8 @@ def test_database_rejects_raw_sql_line_inserts_after_entry_is_sealed(cfo, db):
     with pytest.raises(DBAPIError, match="sealed"):
         db.execute(
             text(
-                "INSERT INTO ledger_lines (entry_id, account_id, debit, credit) "
-                "VALUES (:entry_id, :account_id, 1.00, 0.00)"
+                "INSERT INTO ledger_lines (organization_id, entry_id, account_id, debit, credit) "
+                "VALUES (1, :entry_id, :account_id, 1.00, 0.00)"
             ),
             {"entry_id": entry.id, "account_id": account_id},
         )
@@ -126,11 +126,12 @@ def test_postgres_rejects_unbalanced_entry_written_with_raw_sql():
     """Application validation can be bypassed; the deferred DB trigger must not be."""
     with pytest.raises(DBAPIError):
         with engine.begin() as connection:
+            connection.execute(text("SELECT set_config('app.current_organization_id', '1', true)"))
             entry_id = connection.execute(
                 text(
                     "INSERT INTO journal_entries "
-                    "(reference_no, entry_date, accounting_period, description, source, posted_by, created_at) "
-                    "VALUES ('RAW-UNBALANCED', '2026-11-21', '2026-11', 'raw SQL test', 'MANUAL', "
+                    "(organization_id, reference_no, entry_date, accounting_period, description, source, posted_by, created_at) "
+                    "VALUES (1, 'RAW-UNBALANCED', '2026-11-21', '2026-11', 'raw SQL test', 'MANUAL', "
                     "'attacker@example.test', CURRENT_TIMESTAMP) RETURNING id"
                 )
             ).scalar_one()
@@ -142,22 +143,22 @@ def test_postgres_rejects_unbalanced_entry_written_with_raw_sql():
             ).scalar_one()
             connection.execute(
                 text(
-                    "INSERT INTO ledger_lines (entry_id, account_id, debit, credit) "
-                    "VALUES (:entry_id, :account_id, 100.00, 0.00)"
+                    "INSERT INTO ledger_lines (organization_id, entry_id, account_id, debit, credit) "
+                    "VALUES (1, :entry_id, :account_id, 100.00, 0.00)"
                 ),
                 {"entry_id": entry_id, "account_id": debit_account},
             )
             connection.execute(
                 text(
-                    "INSERT INTO ledger_lines (entry_id, account_id, debit, credit) "
-                    "VALUES (:entry_id, :account_id, 0.00, 80.00)"
+                    "INSERT INTO ledger_lines (organization_id, entry_id, account_id, debit, credit) "
+                    "VALUES (1, :entry_id, :account_id, 0.00, 80.00)"
                 ),
                 {"entry_id": entry_id, "account_id": credit_account},
             )
             connection.execute(
                 text(
-                    "INSERT INTO journal_entry_seals (entry_id, sealed_at) "
-                    "VALUES (:entry_id, CURRENT_TIMESTAMP)"
+                    "INSERT INTO journal_entry_seals (organization_id, entry_id, sealed_at) "
+                    "VALUES (1, :entry_id, CURRENT_TIMESTAMP)"
                 ),
                 {"entry_id": entry_id},
             )
@@ -167,11 +168,12 @@ def test_postgres_rejects_unbalanced_entry_written_with_raw_sql():
 def test_postgres_rejects_journal_entry_without_a_seal():
     with pytest.raises(DBAPIError):
         with engine.begin() as connection:
+            connection.execute(text("SELECT set_config('app.current_organization_id', '1', true)"))
             connection.execute(
                 text(
                     "INSERT INTO journal_entries "
-                    "(reference_no, entry_date, accounting_period, description, source, posted_by, created_at) "
-                    "VALUES ('RAW-UNSEALED', '2026-11-21', '2026-11', 'missing seal', 'MANUAL', "
+                    "(organization_id, reference_no, entry_date, accounting_period, description, source, posted_by, created_at) "
+                    "VALUES (1, 'RAW-UNSEALED', '2026-11-21', '2026-11', 'missing seal', 'MANUAL', "
                     "'attacker@example.test', CURRENT_TIMESTAMP)"
                 )
             )
@@ -180,8 +182,8 @@ def test_postgres_rejects_journal_entry_without_a_seal():
 def test_audit_high_water_mark_cannot_be_lowered_or_deleted(cfo, db):
     post_je(cfo, "1000", "3000", "10.00")
     with pytest.raises(DBAPIError):
-        db.execute(text("UPDATE document_sequences SET last_value = 0 WHERE name = 'AUDIT'"))
+        db.execute(text("UPDATE document_sequences SET last_value = 0 WHERE organization_id = 1 AND name = 'AUDIT'"))
     db.rollback()
     with pytest.raises(DBAPIError):
-        db.execute(text("DELETE FROM document_sequences WHERE name = 'AUDIT'"))
+        db.execute(text("DELETE FROM document_sequences WHERE organization_id = 1 AND name = 'AUDIT'"))
     db.rollback()

@@ -21,7 +21,8 @@ def _locked_period(db: Session, period: str) -> AccountingPeriod:
     ensures close/reopen/posting all serialize on the same row, including the first operation
     ever performed in a month.
     """
-    values = {"period": period, "status": PeriodStatus.OPEN.value}
+    organization_id = int(db.info.get("organization_id", 1))
+    values = {"organization_id": organization_id, "period": period, "status": PeriodStatus.OPEN.value}
     dialect = db.get_bind().dialect.name
     statement: Any
     if dialect == "postgresql":
@@ -30,7 +31,7 @@ def _locked_period(db: Session, period: str) -> AccountingPeriod:
         statement = sqlite_insert(AccountingPeriod).values(**values)
     else:
         raise RuntimeError(f"Accounting-period locking is not implemented for {dialect}")
-    db.execute(statement.on_conflict_do_nothing(index_elements=["period"]))
+    db.execute(statement.on_conflict_do_nothing(index_elements=["organization_id", "period"]))
     row = db.scalar(
         select(AccountingPeriod).where(AccountingPeriod.period == period).with_for_update()
     )

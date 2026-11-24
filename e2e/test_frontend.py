@@ -39,14 +39,18 @@ def app_url(tmp_path_factory: pytest.TempPathFactory):
             "SEED_DEMO_DATA": "true",
         }
     )
-    subprocess.run(
+    migration = subprocess.run(
         [sys.executable, "-m", "alembic", "upgrade", "head"],
         cwd=ROOT,
         env=env,
-        check=True,
         capture_output=True,
         text=True,
     )
+    if migration.returncode:
+        raise RuntimeError(
+            f"Alembic upgrade failed (exit {migration.returncode}).\\n"
+            f"STDOUT:\\n{migration.stdout}\\nSTDERR:\\n{migration.stderr}"
+        )
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
         port = sock.getsockname()[1]
@@ -91,8 +95,8 @@ def browser() -> Browser:
 
 def sign_in(page: Page, base_url: str, email: str, password: str) -> None:
     page.goto(base_url, wait_until="domcontentloaded")
-    page.get_by_label("Email").fill(email)
-    page.get_by_label("Password").fill(password)
+    page.locator("#login-email").fill(email)
+    page.locator("#login-password").fill(password)
     page.get_by_role("button", name="Sign in").click()
     page.get_by_role("heading", name="Dashboard").wait_for()
 

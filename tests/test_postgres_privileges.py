@@ -52,3 +52,14 @@ def test_runtime_role_retains_required_dml_access():
         ).one()
     assert row.can_select and row.can_insert and row.can_update and row.can_delete
     assert row.can_truncate is False
+
+
+def test_runtime_role_sees_only_the_selected_workspace():
+    with engine.begin() as connection:
+        connection.execute(text("SET LOCAL ROLE ledger_app"))
+        without_tenant = connection.execute(text("SELECT COUNT(*) FROM accounts")).scalar_one()
+        connection.execute(text("SELECT set_config('app.current_organization_id', '1', true)"))
+        with_tenant = connection.execute(text("SELECT COUNT(*) FROM accounts")).scalar_one()
+
+    assert without_tenant == 0
+    assert with_tenant == 10

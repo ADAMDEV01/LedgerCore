@@ -107,8 +107,8 @@ def test_concurrent_line_insert_cannot_race_with_entry_sealing():
                 account_id = db.scalar(select(Account.id).where(Account.code == "5000"))
                 db.execute(
                     text(
-                        "INSERT INTO ledger_lines (entry_id, account_id, debit, credit) "
-                        "VALUES (:entry_id, :account_id, 1.00, 0.00)"
+                        "INSERT INTO ledger_lines (organization_id, entry_id, account_id, debit, credit) "
+                        "VALUES (1, :entry_id, :account_id, 1.00, 0.00)"
                     ),
                     {"entry_id": entry_id, "account_id": account_id},
                 )
@@ -124,30 +124,30 @@ def test_concurrent_line_insert_cannot_race_with_entry_sealing():
         entry_id = sealing.execute(
             text(
                 "INSERT INTO journal_entries "
-                "(reference_no, entry_date, accounting_period, description, source, posted_by, created_at) "
-                "VALUES (:reference, '2098-08-15', '2098-08', 'seal race test', 'MANUAL', "
+                "(organization_id, reference_no, entry_date, accounting_period, description, source, posted_by, created_at) "
+                "VALUES (1, :reference, '2098-08-15', '2098-08', 'seal race test', 'MANUAL', "
                 "'race@example.test', CURRENT_TIMESTAMP) RETURNING id"
             ),
             {"reference": reference},
         ).scalar_one()
         sealing.execute(
             text(
-                "INSERT INTO ledger_lines (entry_id, account_id, debit, credit) "
-                "VALUES (:entry_id, :account_id, 20.00, 0.00)"
+                "INSERT INTO ledger_lines (organization_id, entry_id, account_id, debit, credit) "
+                "VALUES (1, :entry_id, :account_id, 20.00, 0.00)"
             ),
             {"entry_id": entry_id, "account_id": debit_account},
         )
         sealing.execute(
             text(
-                "INSERT INTO ledger_lines (entry_id, account_id, debit, credit) "
-                "VALUES (:entry_id, :account_id, 0.00, 20.00)"
+                "INSERT INTO ledger_lines (organization_id, entry_id, account_id, debit, credit) "
+                "VALUES (1, :entry_id, :account_id, 0.00, 20.00)"
             ),
             {"entry_id": entry_id, "account_id": credit_account},
         )
         sealing.execute(
             text(
-                "INSERT INTO journal_entry_seals (entry_id, sealed_at) "
-                "VALUES (:entry_id, CURRENT_TIMESTAMP)"
+                "INSERT INTO journal_entry_seals (organization_id, entry_id, sealed_at) "
+                "VALUES (1, :entry_id, CURRENT_TIMESTAMP)"
             ),
             {"entry_id": entry_id},
         )

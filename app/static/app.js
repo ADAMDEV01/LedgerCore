@@ -228,8 +228,38 @@ function showLogin() {
   state.user = null;
   $("#shell").hidden = true;
   $("#login").hidden = false;
+  $("#login-form").hidden = false;
+  $("#register-form").hidden = true;
   $("#login-password").value = "";
 }
+
+$("#show-register").addEventListener("click", () => {
+  $("#login-form").hidden = true;
+  $("#register-form").hidden = false;
+  $("#register-error").textContent = "";
+});
+
+$("#show-login").addEventListener("click", () => showLogin());
+
+$("#register-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  $("#register-error").textContent = "";
+  try {
+    const data = await api("/auth/register", {
+      method: "POST",
+      body: {
+        company_name: $("#register-company").value.trim(),
+        full_name: $("#register-name").value.trim(),
+        email: $("#register-email").value.trim(),
+        password: $("#register-password").value,
+      },
+    });
+    state.user = data.user;
+    showShell();
+  } catch (err) {
+    $("#register-error").textContent = err.message;
+  }
+});
 
 function showShell() {
   $("#login").hidden = true;
