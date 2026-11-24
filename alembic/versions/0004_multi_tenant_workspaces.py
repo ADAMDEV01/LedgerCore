@@ -18,7 +18,7 @@ TENANT_TABLES = (
 )
 RLS_TABLES = tuple(table for table in TENANT_TABLES if table != "users")
 INDEXED_TENANT_TABLES = (
-    "accounts", "journal_entries", "ledger_lines", "invoices",
+    "accounts", "journal_entries", "journal_entry_seals", "ledger_lines", "invoices",
     "invoice_payments", "audit_logs", "idempotency_records", "users",
 )
 
@@ -63,10 +63,6 @@ def upgrade() -> None:
     with op.batch_alter_table("document_sequences") as batch:
         batch.drop_constraint("pk_document_sequences", type_="primary")
         batch.create_primary_key("pk_document_sequences", ["organization_id", "name"])
-    with op.batch_alter_table("journal_entry_seals") as batch:
-        batch.drop_constraint("pk_journal_entry_seals", type_="primary")
-        batch.create_primary_key("pk_journal_entry_seals", ["organization_id", "entry_id"])
-
     with op.batch_alter_table("accounts") as batch:
         batch.drop_constraint("uq_accounts_code", type_="unique")
         batch.create_unique_constraint("uq_accounts_org_code", ["organization_id", "code"])
