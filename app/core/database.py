@@ -52,7 +52,9 @@ def make_engine(url: str) -> Engine:
 
 
 engine = make_engine(settings.DATABASE_URL)
-SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+SessionLocal = sessionmaker(
+    bind=engine, autoflush=False, expire_on_commit=False, info={"organization_id": 1}
+)
 
 
 def get_db() -> Iterator[Session]:
