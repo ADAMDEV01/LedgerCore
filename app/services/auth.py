@@ -5,10 +5,9 @@ from typing import Optional
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
-from app.core.database import set_tenant_context
-
 from app.core import clock
 from app.core.config import settings
+from app.core.database import set_tenant_context
 from app.core.errors import AuthenticationError, ConflictError, TooManyRequests
 from app.core.security import (
     burn_verify,
