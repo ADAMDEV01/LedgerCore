@@ -45,11 +45,23 @@ def upgrade() -> None:
         )
 
     # Backfill every existing account and financial record into one preserved workspace.
+    bind = op.get_bind()
     for table in TENANT_TABLES:
-        op.add_column(
-            table,
-            sa.Column("organization_id", sa.Integer(), sa.ForeignKey("organizations.id"), nullable=True),
-        )
+        if bind.dialect.name == "sqlite":
+            # SQLite cannot ALTER TABLE ADD CONSTRAINT; create the column and FK in batch mode.
+            with op.batch_alter_table(table) as batch:
+                batch.add_column(sa.Column("organization_id", sa.Integer(), nullable=True))
+                batch.create_foreign_key(
+                    f"fk_{table}_organization_id_organizations",
+                    "organizations",
+                    ["organization_id"],
+                    ["id"],
+                )
+        else:
+            op.add_column(
+                table,
+                sa.Column("organization_id", sa.Integer(), sa.ForeignKey("organizations.id"), nullable=True),
+            )
         op.execute(sa.text(f"UPDATE {table} SET organization_id = 1 WHERE organization_id IS NULL"))
         with op.batch_alter_table(table) as batch:
             batch.alter_column("organization_id", existing_type=sa.Integer(), nullable=False)
