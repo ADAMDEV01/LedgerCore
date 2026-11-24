@@ -53,7 +53,37 @@ jobs:
           REVOKE CREATE ON SCHEMA public FROM PUBLIC;
           GRANT USAGE, CREATE ON SCHEMA public TO ledger_migrator;
           SQL
+          # Seed immutable records at revision 0003 so the tenant migration proves that it
+          # can backfill existing audit and ledger rows, not only empty tables.
+          alembic upgrade 0003
+          PGPASSWORD=ledger psql -h localhost -U ledger -d ledgercore_migrations -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO accounts (code, name, account_type, is_active, created_at)
+          VALUES
+            ('1000', 'Migration Fixture Cash', 'ASSET', true, CURRENT_TIMESTAMP),
+            ('3000', 'Migration Fixture Capital', 'EQUITY', true, CURRENT_TIMESTAMP);
+          INSERT INTO audit_logs (seq, actor, action, entity, details, created_at, prev_hash, row_hash)
+          VALUES (1, 'migration-ci', 'FIXTURE', 'legacy-row', 'must survive tenant backfill',
+                  CURRENT_TIMESTAMP, 'genesis', 'migration-ci-hash');
+          BEGIN;
+          INSERT INTO journal_entries
+            (reference_no, entry_date, accounting_period, description, source, posted_by, created_at)
+          VALUES ('MIGRATION-CI', CURRENT_DATE, to_char(CURRENT_DATE, 'YYYY-MM'),
+                  'Migration backfill fixture', 'MANUAL', 'migration-ci', CURRENT_TIMESTAMP)
+          RETURNING id AS entry_id \\gset
+          SELECT id AS cash_id FROM accounts WHERE code = '1000' \\gset
+          SELECT id AS capital_id FROM accounts WHERE code = '3000' \\gset
+          INSERT INTO ledger_lines (entry_id, account_id, debit, credit)
+          VALUES (:'entry_id', :'cash_id', 125.00, 0.00),
+                 (:'entry_id', :'capital_id', 0.00, 125.00);
+          INSERT INTO journal_entry_seals (entry_id, sealed_at)
+          VALUES (:'entry_id', CURRENT_TIMESTAMP);
+          COMMIT;
+          SQL
           alembic upgrade head
+          test "$(PGPASSWORD=ledger psql -h localhost -U ledger -d ledgercore_migrations -Atc "SELECT count(*) FROM audit_logs WHERE organization_id = 1")" = "1"
+          test "$(PGPASSWORD=ledger psql -h localhost -U ledger -d ledgercore_migrations -Atc "SELECT count(*) FROM journal_entries WHERE organization_id = 1")" = "1"
+          test "$(PGPASSWORD=ledger psql -h localhost -U ledger -d ledgercore_migrations -Atc "SELECT count(*) FROM ledger_lines WHERE organization_id = 1")" = "2"
+          test "$(PGPASSWORD=ledger psql -h localhost -U ledger -d ledgercore_migrations -Atc "SELECT count(*) FROM journal_entry_seals WHERE organization_id = 1")" = "1"
           alembic check
 
   frontend:
