@@ -39,14 +39,18 @@ def app_url(tmp_path_factory: pytest.TempPathFactory):
             "SEED_DEMO_DATA": "true",
         }
     )
-    subprocess.run(
+    migration = subprocess.run(
         [sys.executable, "-m", "alembic", "upgrade", "head"],
         cwd=ROOT,
         env=env,
-        check=True,
         capture_output=True,
         text=True,
     )
+    if migration.returncode:
+        raise RuntimeError(
+            f"Alembic upgrade failed (exit {migration.returncode}).\\n"
+            f"STDOUT:\\n{migration.stdout}\\nSTDERR:\\n{migration.stderr}"
+        )
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
         port = sock.getsockname()[1]
