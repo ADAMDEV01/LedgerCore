@@ -91,8 +91,8 @@ def browser() -> Browser:
 
 def sign_in(page: Page, base_url: str, email: str, password: str) -> None:
     page.goto(base_url, wait_until="domcontentloaded")
-    page.get_by_label("Email", exact=True).fill(email)
-    page.get_by_label("Password", exact=True).fill(password)
+    page.locator("#login-email").fill(email)
+    page.locator("#login-password").fill(password)
     page.get_by_role("button", name="Sign in").click()
     page.get_by_role("heading", name="Dashboard").wait_for()
 
