@@ -18,10 +18,10 @@ def _register(client, company: str, email: str):
 
 def test_registration_creates_a_separate_cfo_workspace_with_default_accounts():
     client = make_client()
-    user = _register(client, "Northwind Studio", "owner@northwind.example.com")
+    user = _register(client, "Northwind Studio", "northwind@ledgertest.io")
 
     assert user["role"] == "CFO"
-    assert client.get(f"{API}/auth/me").json()["email"] == "owner@northwind.example.com"
+    assert client.get(f"{API}/auth/me").json()["email"] == "northwind@ledgertest.io"
     accounts = client.get(f"{API}/accounts?page_size=500").json()["items"]
     assert len(accounts) == 10
     assert {row["code"] for row in accounts} >= {"1000", "1100", "4000"}
@@ -30,8 +30,8 @@ def test_registration_creates_a_separate_cfo_workspace_with_default_accounts():
 def test_companies_can_reuse_account_codes_without_cross_workspace_visibility():
     northwind = make_client()
     contoso = make_client()
-    _register(northwind, "Northwind Studio", "owner@northwind.example.com")
-    _register(contoso, "Contoso Labs", "owner@contoso.example.com")
+    _register(northwind, "Northwind Studio", "northwind@ledgertest.io")
+    _register(contoso, "Contoso Labs", "contoso@ledgertest.io")
 
     for client in (northwind, contoso):
         response = client.post(
@@ -43,16 +43,16 @@ def test_companies_can_reuse_account_codes_without_cross_workspace_visibility():
     northwind_codes = {row["code"] for row in northwind.get(f"{API}/accounts?page_size=500").json()["items"]}
     contoso_codes = {row["code"] for row in contoso.get(f"{API}/accounts?page_size=500").json()["items"]}
     assert "7777" in northwind_codes and "7777" in contoso_codes
-    assert northwind.get(f"{API}/users").json()[0]["email"] == "owner@northwind.example.com"
-    assert contoso.get(f"{API}/users").json()[0]["email"] == "owner@contoso.example.com"
+    assert northwind.get(f"{API}/users").json()[0]["email"] == "northwind@ledgertest.io"
+    assert contoso.get(f"{API}/users").json()[0]["email"] == "contoso@ledgertest.io"
 
 
 
 def test_financial_document_sequences_are_independent_per_company():
     northwind = make_client()
     contoso = make_client()
-    _register(northwind, "Northwind Studio", "owner@northwind.example.com")
-    _register(contoso, "Contoso Labs", "owner@contoso.example.com")
+    _register(northwind, "Northwind Studio", "northwind@ledgertest.io")
+    _register(contoso, "Contoso Labs", "contoso@ledgertest.io")
 
     payload = {
         "client_name": "Customer Ltd",
@@ -82,8 +82,8 @@ def test_financial_document_sequences_are_independent_per_company():
 def test_workspace_cannot_post_a_journal_entry_using_another_company_account():
     northwind = make_client()
     contoso = make_client()
-    _register(northwind, "Northwind Studio", "owner@northwind.example.com")
-    _register(contoso, "Contoso Labs", "owner@contoso.example.com")
+    _register(northwind, "Northwind Studio", "northwind@ledgertest.io")
+    _register(contoso, "Contoso Labs", "contoso@ledgertest.io")
 
     northwind_accounts = northwind.get(f"{API}/accounts?page_size=500").json()["items"]
     contoso_accounts = contoso.get(f"{API}/accounts?page_size=500").json()["items"]
