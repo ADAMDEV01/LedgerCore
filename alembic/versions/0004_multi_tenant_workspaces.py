@@ -156,6 +156,10 @@ def upgrade() -> None:
                 f"CREATE TRIGGER {table}_tenant_reference_guard BEFORE INSERT ON {table} "
                 f"WHEN {condition} BEGIN SELECT RAISE(ABORT, 'cross-organization reference'); END"
             )
+        from app.core.db_triggers import install_append_only_triggers, install_ledger_integrity_triggers
+
+        install_append_only_triggers(bind)
+        install_ledger_integrity_triggers(bind)
 
 
 def downgrade() -> None:
