@@ -132,14 +132,14 @@ def test_concurrent_line_insert_cannot_race_with_entry_sealing():
         ).scalar_one()
         sealing.execute(
             text(
-                "INSERT INTO ledger_lines (entry_id, account_id, debit, credit) "
+                "INSERT INTO ledger_lines (organization_id, entry_id, account_id, debit, credit) "
                 "VALUES (1, :entry_id, :account_id, 20.00, 0.00)"
             ),
             {"entry_id": entry_id, "account_id": debit_account},
         )
         sealing.execute(
             text(
-                "INSERT INTO ledger_lines (entry_id, account_id, debit, credit) "
+                "INSERT INTO ledger_lines (organization_id, entry_id, account_id, debit, credit) "
                 "VALUES (1, :entry_id, :account_id, 0.00, 20.00)"
             ),
             {"entry_id": entry_id, "account_id": credit_account},
