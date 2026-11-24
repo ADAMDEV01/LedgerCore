@@ -38,7 +38,7 @@ def test_a_forged_row_is_detected_by_chain_verification(cfo, db):
     count = db.scalar(select(func.count()).select_from(AuditLog))
     db.add(
         AuditLog(
-            seq=count + 1, actor="intruder", action="FORGED", entity="x", details="y",
+            organization_id=1, seq=count + 1, actor="intruder", action="FORGED", entity="x", details="y",
             created_at=clock.utcnow(), prev_hash=GENESIS_HASH, row_hash="f" * 64,
         )
     )
@@ -50,7 +50,7 @@ def test_a_forged_row_is_detected_by_chain_verification(cfo, db):
 
 def test_deleting_the_last_audit_row_is_detected_by_sequence_high_water_mark(cfo, db):
     post_je(cfo, "1000", "3000", "10.00")
-    last_seq = db.get(DocumentSequence, "AUDIT").last_value
+    last_seq = db.get(DocumentSequence, (1, "AUDIT")).last_value
     if engine.dialect.name == "sqlite":
         # Simulate a privileged attacker who has already disabled the append-only trigger.
         db.execute(text("DROP TRIGGER IF EXISTS audit_logs_no_delete"))
