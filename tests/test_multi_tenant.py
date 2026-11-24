@@ -45,3 +45,35 @@ def test_companies_can_reuse_account_codes_without_cross_workspace_visibility():
     assert "7777" in northwind_codes and "7777" in contoso_codes
     assert northwind.get(f"{API}/users").json()[0]["email"] == "owner@northwind.test"
     assert contoso.get(f"{API}/users").json()[0]["email"] == "owner@contoso.test"
+
+
+
+def test_financial_document_sequences_are_independent_per_company():
+    northwind = make_client()
+    contoso = make_client()
+    _register(northwind, "Northwind Studio", "owner@northwind.test")
+    _register(contoso, "Contoso Labs", "owner@contoso.test")
+
+    payload = {
+        "client_name": "Customer Ltd",
+        "currency": "USD",
+        "exchange_rate": "1",
+        "amount": "125.00",
+        "tax_rate": "0.00",
+        "due_date": "2099-12-31",
+    }
+    northwind_invoice = northwind.post(
+        f"{API}/invoices",
+        json=payload,
+        headers={"Idempotency-Key": "northwind-invoice-0001"},
+    )
+    contoso_invoice = contoso.post(
+        f"{API}/invoices",
+        json=payload,
+        headers={"Idempotency-Key": "contoso-invoice-00001"},
+    )
+
+    assert northwind_invoice.status_code == 201, northwind_invoice.text
+    assert contoso_invoice.status_code == 201, contoso_invoice.text
+    assert northwind_invoice.json()["invoice_number"] == "INV-000001"
+    assert contoso_invoice.json()["invoice_number"] == "INV-000001"
