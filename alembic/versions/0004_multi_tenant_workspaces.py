@@ -46,6 +46,11 @@ def upgrade() -> None:
 
     # Backfill every existing account and financial record into one preserved workspace.
     bind = op.get_bind()
+    if bind.dialect.name == "sqlite":
+        from app.core.db_triggers import drop_append_only_triggers, drop_ledger_integrity_triggers
+
+        drop_ledger_integrity_triggers(bind)
+        drop_append_only_triggers(bind)
     for table in TENANT_TABLES:
         if bind.dialect.name == "sqlite":
             # SQLite cannot ALTER TABLE ADD CONSTRAINT; create the column and FK in batch mode.
@@ -186,6 +191,10 @@ def downgrade() -> None:
             op.execute(f"DROP TRIGGER IF EXISTS {table}_tenant_reference_guard ON {table}")
         op.execute("DROP FUNCTION IF EXISTS ledgercore_enforce_tenant_references()")
     elif bind.dialect.name == "sqlite":
+        from app.core.db_triggers import drop_append_only_triggers, drop_ledger_integrity_triggers
+
+        drop_ledger_integrity_triggers(bind)
+        drop_append_only_triggers(bind)
         for table in ("ledger_lines", "journal_entry_seals", "invoices", "invoice_payments", "journal_entries"):
             op.execute(f"DROP TRIGGER IF EXISTS {table}_tenant_reference_guard")
 
