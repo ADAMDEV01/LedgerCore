@@ -126,6 +126,7 @@ def test_postgres_rejects_unbalanced_entry_written_with_raw_sql():
     """Application validation can be bypassed; the deferred DB trigger must not be."""
     with pytest.raises(DBAPIError):
         with engine.begin() as connection:
+            connection.execute(text("SELECT set_config('app.current_organization_id', '1', true)"))
             entry_id = connection.execute(
                 text(
                     "INSERT INTO journal_entries "
