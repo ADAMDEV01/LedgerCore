@@ -206,9 +206,6 @@ def downgrade() -> None:
     with op.batch_alter_table("accounts") as batch:
         batch.drop_constraint("uq_accounts_org_code", type_="unique")
         batch.create_unique_constraint("uq_accounts_code", ["code"])
-    with op.batch_alter_table("journal_entry_seals") as batch:
-        batch.drop_constraint("pk_journal_entry_seals", type_="primary")
-        batch.create_primary_key("pk_journal_entry_seals", ["entry_id"])
     with op.batch_alter_table("document_sequences") as batch:
         batch.drop_constraint("pk_document_sequences", type_="primary")
         batch.create_primary_key("pk_document_sequences", ["name"])
