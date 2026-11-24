@@ -17,6 +17,10 @@ TENANT_TABLES = (
     "audit_logs", "idempotency_records", "users",
 )
 RLS_TABLES = tuple(table for table in TENANT_TABLES if table != "users")
+INDEXED_TENANT_TABLES = (
+    "accounts", "journal_entries", "ledger_lines", "invoices",
+    "invoice_payments", "audit_logs", "idempotency_records", "users",
+)
 
 
 def upgrade() -> None:
@@ -44,7 +48,8 @@ def upgrade() -> None:
         op.execute(sa.text(f"UPDATE {table} SET organization_id = 1 WHERE organization_id IS NULL"))
         with op.batch_alter_table(table) as batch:
             batch.alter_column("organization_id", existing_type=sa.Integer(), nullable=False)
-        op.create_index(f"ix_{table}_organization_id", table, ["organization_id"])
+        if table in INDEXED_TENANT_TABLES:
+            op.create_index(f"ix_{table}_organization_id", table, ["organization_id"])
 
     # Numbering and accounting-period keys are local to each organization.
     with op.batch_alter_table("accounting_periods") as batch:
@@ -195,7 +200,8 @@ def downgrade() -> None:
         batch.create_primary_key("pk_accounting_periods", ["period"])
 
     for table in reversed(TENANT_TABLES):
-        op.drop_index(f"ix_{table}_organization_id", table_name=table)
+        if table in INDEXED_TENANT_TABLES:
+            op.drop_index(f"ix_{table}_organization_id", table_name=table)
         with op.batch_alter_table(table) as batch:
             batch.drop_column("organization_id")
     op.drop_table("organizations")
