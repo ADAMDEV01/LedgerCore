@@ -4,13 +4,16 @@
    so API data cannot inject markup (the CSP also forbids inline scripts). */
 
 const BASE_CURRENCY = "USD"; // mirrors the server's BASE_CURRENCY setting
-const state = { user: null, view: "dashboard", accounts: [], navigationId: 0 };
+const state = { user: null, view: "dashboard", accounts: [], navigationId: 0, dataVersion: 0 };
 const viewCache = new Map();
 const readCache = new Map();
 const VIEW_CACHE_TTL_MS = 30_000;
-const READ_CACHE_TTL_MS = 4_000;
+const READ_CACHE_TTL_MS = 30_000;
+let viewPrefetchPromise = null;
+let viewPrefetchGeneration = 0;
 
 function invalidateViewData() {
+  state.dataVersion += 1;
   readCache.clear();
   for (const entry of viewCache.values()) entry.updatedAt = 0;
 }
@@ -247,6 +250,8 @@ function askDialog(title, fields, submitLabel = "Confirm", danger = false) {
 function showLogin() {
   state.user = null;
   state.navigationId += 1;
+  viewPrefetchGeneration += 1;
+  viewPrefetchPromise = null;
   viewCache.clear();
   readCache.clear();
   $("#view").replaceChildren();
@@ -363,6 +368,7 @@ async function go(view) {
   if (cached) {
     // Keep the last rendered section on screen while fresh data loads.
     root.replaceChildren(cached.node);
+    if (typeof cached.node.activate === "function") cached.node.activate();
     root.setAttribute("aria-busy", "false");
     if (Date.now() - cached.updatedAt < VIEW_CACHE_TTL_MS) {
       refreshProof();
@@ -370,7 +376,10 @@ async function go(view) {
     }
   } else {
     root.setAttribute("aria-busy", "true");
-    root.replaceChildren(h("p", { class: "muted", text: "Loading…" }));
+    // Keep the current section visible while an uncached first visit is prepared.
+    if (!root.firstElementChild) {
+      root.replaceChildren(h("p", { class: "muted", text: "Loading…" }));
+    }
   }
 
   try {
@@ -382,6 +391,7 @@ async function go(view) {
     } else {
       root.replaceChildren(content);
       viewCache.set(view, { node: content, updatedAt: Date.now() });
+      if (typeof content.activate === "function") content.activate();
       root.focus();
     }
   } catch (err) {
@@ -392,6 +402,54 @@ async function go(view) {
     if (navigationId === state.navigationId) root.setAttribute("aria-busy", "false");
   }
   refreshProof();
+  if (state.user && view === "dashboard") void prefetchViews();
+}
+
+async function prefetchViews() {
+  const userId = state.user?.id;
+  if (!userId) return;
+  if (viewPrefetchPromise) return viewPrefetchPromise;
+
+  const generation = ++viewPrefetchGeneration;
+  const dataVersion = state.dataVersion;
+  const staging = h("div", { hidden: true, "aria-hidden": "true" });
+  document.body.append(staging);
+
+  const allowedViews = new Set(VIEWS.filter(([, , allowed]) => allowed()).map(([view]) => view));
+  const views = Object.keys(RENDERERS).filter((view) =>
+    view !== state.view && allowedViews.has(view));
+  const jobs = views.map(async (view) => {
+    if (viewCache.has(view)) return;
+    try {
+      const content = await RENDERERS[view]();
+      if (generation !== viewPrefetchGeneration ||
+          state.user?.id !== userId ||
+          state.dataVersion !== dataVersion ||
+          viewCache.has(view)) return;
+      staging.append(content);
+      viewCache.set(view, { node: content, updatedAt: Date.now() });
+    } catch (_) {
+      // Preloading is opportunistic; the regular navigation path handles failures.
+    }
+  });
+
+  const run = (async () => {
+    await Promise.allSettled(jobs);
+    if (generation === viewPrefetchGeneration && state.user?.id === userId) {
+      try {
+        await api(`/reports/trial-balance?as_of=${isoToday()}`);
+      } catch (_) {
+        // The report will load normally when the user opens it.
+      }
+    }
+    staging.remove();
+  })();
+  viewPrefetchPromise = run;
+  try {
+    await run;
+  } finally {
+    if (generation === viewPrefetchGeneration) viewPrefetchPromise = null;
+  }
 }
 
 let proofUpdatedAt = 0;
@@ -505,6 +563,7 @@ const swap = async (promise) => {
     if (navigationId !== state.navigationId || view !== state.view) return;
     $("#view").replaceChildren(content);
     viewCache.set(view, { node: content, updatedAt: Date.now() });
+    if (typeof content.activate === "function") content.activate();
   } catch (err) {
     if (navigationId === state.navigationId && view === state.view) toast(err.message, "bad");
   }
@@ -747,7 +806,12 @@ async function renderReports(tab = "trial") {
     h("div", { class: "head" }, h("h2", { text: "Reports" })),
     h("div", { class: "tabs" }, tabBtn("trial", "Trial balance"), tabBtn("income", "Income statement"), tabBtn("balance", "Balance sheet")),
     h("div", { class: "panel" }, controls, h("div", { class: "head" }, h("span", {}), h("button", { type: "button", class: "primary", text: "Run report", onclick: run })), body));
-  setTimeout(run, 0); // after the caller has attached the view to the DOM
+  let activated = false;
+  root.activate = () => {
+    if (activated) return;
+    activated = true;
+    void run();
+  };
   return root;
 }
 
