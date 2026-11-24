@@ -143,15 +143,15 @@ def test_postgres_rejects_unbalanced_entry_written_with_raw_sql():
             ).scalar_one()
             connection.execute(
                 text(
-                    "INSERT INTO ledger_lines (entry_id, account_id, debit, credit) "
-                    "VALUES (:entry_id, :account_id, 100.00, 0.00)"
+                    "INSERT INTO ledger_lines (organization_id, entry_id, account_id, debit, credit) "
+                    "VALUES (1, :entry_id, :account_id, 100.00, 0.00)"
                 ),
                 {"entry_id": entry_id, "account_id": debit_account},
             )
             connection.execute(
                 text(
-                    "INSERT INTO ledger_lines (entry_id, account_id, debit, credit) "
-                    "VALUES (:entry_id, :account_id, 0.00, 80.00)"
+                    "INSERT INTO ledger_lines (organization_id, entry_id, account_id, debit, credit) "
+                    "VALUES (1, :entry_id, :account_id, 0.00, 80.00)"
                 ),
                 {"entry_id": entry_id, "account_id": credit_account},
             )
@@ -168,10 +168,11 @@ def test_postgres_rejects_unbalanced_entry_written_with_raw_sql():
 def test_postgres_rejects_journal_entry_without_a_seal():
     with pytest.raises(DBAPIError):
         with engine.begin() as connection:
+            connection.execute(text("SELECT set_config('app.current_organization_id', '1', true)"))
             connection.execute(
                 text(
                     "INSERT INTO journal_entries "
-                    "(reference_no, entry_date, accounting_period, description, source, posted_by, created_at) "
+                    "(organization_id, reference_no, entry_date, accounting_period, description, source, posted_by, created_at) "
                     "VALUES (1, 'RAW-UNSEALED', '2026-11-21', '2026-11', 'missing seal', 'MANUAL', "
                     "'attacker@example.test', CURRENT_TIMESTAMP)"
                 )
