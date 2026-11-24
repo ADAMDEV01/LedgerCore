@@ -178,11 +178,10 @@ def upgrade() -> None:
             )
 
     if bind.dialect.name in ("postgresql", "sqlite"):
-                from app.core.db_triggers import install_append_only_triggers, install_ledger_integrity_triggers
-        
-                install_append_only_triggers(bind)
-                install_ledger_integrity_triggers(bind)
-        
+        from app.core.db_triggers import install_append_only_triggers, install_ledger_integrity_triggers
+
+        install_append_only_triggers(bind)
+        install_ledger_integrity_triggers(bind)
 
 def downgrade() -> None:
     bind = op.get_bind()
