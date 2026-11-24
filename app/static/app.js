@@ -368,6 +368,7 @@ async function go(view) {
   if (cached) {
     // Keep the last rendered section on screen while fresh data loads.
     root.replaceChildren(cached.node);
+    if (typeof cached.node.activate === "function") cached.node.activate();
     root.setAttribute("aria-busy", "false");
     if (Date.now() - cached.updatedAt < VIEW_CACHE_TTL_MS) {
       refreshProof();
@@ -390,6 +391,7 @@ async function go(view) {
     } else {
       root.replaceChildren(content);
       viewCache.set(view, { node: content, updatedAt: Date.now() });
+      if (typeof content.activate === "function") content.activate();
       root.focus();
     }
   } catch (err) {
@@ -413,8 +415,7 @@ async function prefetchViews() {
   const staging = h("div", { hidden: true, "aria-hidden": "true" });
   document.body.append(staging);
 
-  const views = Object.keys(RENDERERS).filter((view) =>
-    view !== state.view && view !== "reports");
+  const views = Object.keys(RENDERERS).filter((view) => view !== state.view);
   const jobs = views.map(async (view) => {
     if (viewCache.has(view)) return;
     try {
@@ -559,6 +560,7 @@ const swap = async (promise) => {
     if (navigationId !== state.navigationId || view !== state.view) return;
     $("#view").replaceChildren(content);
     viewCache.set(view, { node: content, updatedAt: Date.now() });
+    if (typeof content.activate === "function") content.activate();
   } catch (err) {
     if (navigationId === state.navigationId && view === state.view) toast(err.message, "bad");
   }
@@ -801,7 +803,12 @@ async function renderReports(tab = "trial") {
     h("div", { class: "head" }, h("h2", { text: "Reports" })),
     h("div", { class: "tabs" }, tabBtn("trial", "Trial balance"), tabBtn("income", "Income statement"), tabBtn("balance", "Balance sheet")),
     h("div", { class: "panel" }, controls, h("div", { class: "head" }, h("span", {}), h("button", { type: "button", class: "primary", text: "Run report", onclick: run })), body));
-  setTimeout(run, 0); // after the caller has attached the view to the DOM
+  let activated = false;
+  root.activate = () => {
+    if (activated) return;
+    activated = true;
+    void run();
+  };
   return root;
 }
 
