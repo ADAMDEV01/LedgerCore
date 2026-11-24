@@ -5,6 +5,15 @@
 
 const BASE_CURRENCY = "USD"; // mirrors the server's BASE_CURRENCY setting
 const state = { user: null, view: "dashboard", accounts: [], navigationId: 0 };
+const viewCache = new Map();
+const readCache = new Map();
+const VIEW_CACHE_TTL_MS = 30_000;
+const READ_CACHE_TTL_MS = 4_000;
+
+function invalidateViewData() {
+  readCache.clear();
+  for (const entry of viewCache.values()) entry.updatedAt = 0;
+}
 
 const $ = (selector) => document.querySelector(selector);
 const isoToday = () => new Date().toISOString().slice(0, 10);
@@ -155,6 +164,11 @@ function refreshSession() {
 }
 
 async function api(path, { method = "GET", body, retry = true } = {}) {
+  const cacheable = method === "GET" && !path.startsWith("/auth/");
+  if (cacheable) {
+    const cached = readCache.get(path);
+    if (cached && Date.now() - cached.updatedAt < READ_CACHE_TTL_MS) return cached.data;
+  }
   const headers = {};
   if (body !== undefined) headers["Content-Type"] = "application/json";
   if (method !== "GET") headers["X-CSRF-Token"] = csrfToken();
@@ -186,6 +200,12 @@ async function api(path, { method = "GET", body, retry = true } = {}) {
   }
   const data = await res.json();
   if (pendingKey) sessionStorage.removeItem(pendingKey);
+  if (method === "GET") {
+    if (cacheable) readCache.set(path, { data, updatedAt: Date.now() });
+  } else {
+    invalidateViewData();
+    if (!path.startsWith("/auth/")) void refreshProof(true);
+  }
   return data;
 }
 
@@ -226,6 +246,11 @@ function askDialog(title, fields, submitLabel = "Confirm", danger = false) {
 /* ---------- auth ---------- */
 function showLogin() {
   state.user = null;
+  state.navigationId += 1;
+  viewCache.clear();
+  readCache.clear();
+  $("#view").replaceChildren();
+  $("#view").setAttribute("aria-busy", "false");
   $("#shell").hidden = true;
   $("#login").hidden = false;
   $("#login-form").hidden = false;
@@ -313,6 +338,18 @@ function buildNav() {
   );
 }
 
+function hasUnsubmittedChanges(root) {
+  return [...root.querySelectorAll("input, select, textarea")].some((field) => {
+    if (field instanceof HTMLInputElement && ["checkbox", "radio"].includes(field.type)) {
+      return field.checked !== field.defaultChecked;
+    }
+    if (field instanceof HTMLSelectElement) {
+      return [...field.options].some((option) => option.selected !== option.defaultSelected);
+    }
+    return field.value !== field.defaultValue;
+  });
+}
+
 async function go(view) {
   state.view = view;
   const navigationId = ++state.navigationId;
@@ -320,32 +357,65 @@ async function go(view) {
     if (b.dataset.view === view) b.setAttribute("aria-current", "page");
     else b.removeAttribute("aria-current");
   }
+
   const root = $("#view");
-  root.setAttribute("aria-busy", "true");
-  root.replaceChildren(h("p", { class: "muted", text: "Loading…" }));
+  const cached = viewCache.get(view);
+  if (cached) {
+    // Keep the last rendered section on screen while fresh data loads.
+    root.replaceChildren(cached.node);
+    root.setAttribute("aria-busy", "false");
+    if (Date.now() - cached.updatedAt < VIEW_CACHE_TTL_MS) {
+      refreshProof();
+      return;
+    }
+  } else {
+    root.setAttribute("aria-busy", "true");
+    root.replaceChildren(h("p", { class: "muted", text: "Loading…" }));
+  }
+
   try {
     const content = await RENDERERS[view]();
     if (navigationId !== state.navigationId) return;
-    root.replaceChildren(content);
-    root.focus();
+    if (cached && hasUnsubmittedChanges(root)) {
+      // Never discard a partially completed form while refreshing stale data.
+      viewCache.set(view, { node: root.firstElementChild, updatedAt: Date.now() });
+    } else {
+      root.replaceChildren(content);
+      viewCache.set(view, { node: content, updatedAt: Date.now() });
+      root.focus();
+    }
   } catch (err) {
     if (navigationId !== state.navigationId) return;
-    root.replaceChildren(h("p", { class: "error", text: err.message }));
+    if (!cached) root.replaceChildren(h("p", { class: "error", text: err.message }));
+    else toast("Showing the last loaded data; refresh failed.", "bad");
   } finally {
     if (navigationId === state.navigationId) root.setAttribute("aria-busy", "false");
   }
   refreshProof();
 }
 
-async function refreshProof() {
-  try {
-    const tb = await api("/reports/trial-balance");
-    $("#proof-dr").textContent = fmt(tb.total_debit);
-    $("#proof-cr").textContent = fmt(tb.total_credit);
-    const state_ = $("#proof-state");
-    state_.textContent = tb.is_balanced ? "Balanced" : "OUT OF BALANCE";
-    state_.className = tb.is_balanced ? "proof-state" : "proof-state bad";
-  } catch (_) { /* proof is advisory */ }
+let proofUpdatedAt = 0;
+let proofRefreshPromise = null;
+
+async function refreshProof(force = false) {
+  if (!force && Date.now() - proofUpdatedAt < 15_000) return;
+  if (proofRefreshPromise) return proofRefreshPromise;
+  proofRefreshPromise = (async () => {
+    try {
+      const tb = await api("/reports/trial-balance");
+      $("#proof-dr").textContent = fmt(tb.total_debit);
+      $("#proof-cr").textContent = fmt(tb.total_credit);
+      const state_ = $("#proof-state");
+      state_.textContent = tb.is_balanced ? "Balanced" : "OUT OF BALANCE";
+      state_.className = tb.is_balanced ? "proof-state" : "proof-state bad";
+    } catch (_) {
+      /* The proof is advisory; retry after the short backoff. */
+    } finally {
+      proofUpdatedAt = Date.now();
+      proofRefreshPromise = null;
+    }
+  })();
+  return proofRefreshPromise;
 }
 
 async function loadAccounts() {
@@ -428,7 +498,16 @@ async function renderDashboard() {
 
 /* ---------- journal ---------- */
 const swap = async (promise) => {
-  try { $("#view").replaceChildren(await promise); } catch (err) { toast(err.message, "bad"); }
+  const navigationId = state.navigationId;
+  const view = state.view;
+  try {
+    const content = await promise;
+    if (navigationId !== state.navigationId || view !== state.view) return;
+    $("#view").replaceChildren(content);
+    viewCache.set(view, { node: content, updatedAt: Date.now() });
+  } catch (err) {
+    if (navigationId === state.navigationId && view === state.view) toast(err.message, "bad");
+  }
   refreshProof();
 };
 
