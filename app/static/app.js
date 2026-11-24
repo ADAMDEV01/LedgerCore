@@ -415,7 +415,9 @@ async function prefetchViews() {
   const staging = h("div", { hidden: true, "aria-hidden": "true" });
   document.body.append(staging);
 
-  const views = Object.keys(RENDERERS).filter((view) => view !== state.view);
+  const allowedViews = new Set(VIEWS.filter(([, , allowed]) => allowed()).map(([view]) => view));
+  const views = Object.keys(RENDERERS).filter((view) =>
+    view !== state.view && allowedViews.has(view));
   const jobs = views.map(async (view) => {
     if (viewCache.has(view)) return;
     try {
