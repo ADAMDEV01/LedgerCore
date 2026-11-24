@@ -96,6 +96,8 @@ def _set_postgres_tenant_context(session: Session, transaction, connection) -> N
 
 @event.listens_for(Session, "do_orm_execute")
 def _scope_tenant_queries(state) -> None:
+    if not state.is_orm_statement:
+        return
     organization_id = state.session.info.get("organization_id")
     if not organization_id:
         return
