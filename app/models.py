@@ -138,7 +138,7 @@ class JournalEntrySeal(Base):
 
     __tablename__ = "journal_entry_seals"
 
-    organization_id: Mapped[int] = mapped_column(ForeignKey("organizations.id"), primary_key=True)
+    organization_id: Mapped[int] = mapped_column(ForeignKey("organizations.id"), index=True)
     entry_id: Mapped[int] = mapped_column(
         ForeignKey("journal_entries.id", ondelete="RESTRICT"), primary_key=True
     )
