@@ -424,7 +424,8 @@ async function prefetchViews() {
       const content = await RENDERERS[view]();
       if (generation !== viewPrefetchGeneration ||
           state.user?.id !== userId ||
-          state.dataVersion !== dataVersion) return;
+          state.dataVersion !== dataVersion ||
+          viewCache.has(view)) return;
       staging.append(content);
       viewCache.set(view, { node: content, updatedAt: Date.now() });
     } catch (_) {
