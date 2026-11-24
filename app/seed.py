@@ -9,9 +9,9 @@ from sqlalchemy.orm import Session
 from app.core import clock
 from app.core.config import settings
 from app.core.constants import SEQ_AUDIT, SEQ_INVOICE, SEQ_JOURNAL
-from app.core.database import SessionLocal
+from app.core.database import SessionLocal, set_tenant_context
 from app.core.enums import AccountType, Role
-from app.models import Account, DocumentSequence, JournalEntry, User
+from app.models import Account, DocumentSequence, JournalEntry, Organization, User
 from app.services import invoices as invoice_svc
 from app.services.auth import create_user
 from app.services.ledger import LineInput, post_entry
@@ -33,9 +33,10 @@ CHART_OF_ACCOUNTS = [
 
 
 def ensure_sequences(db: Session) -> None:
+    organization_id = int(db.info.get("organization_id", 1))
     for name in (SEQ_JOURNAL, SEQ_INVOICE, SEQ_AUDIT):
-        if db.get(DocumentSequence, name) is None:
-            db.add(DocumentSequence(name=name, last_value=0))
+        if db.get(DocumentSequence, (organization_id, name)) is None:
+            db.add(DocumentSequence(organization_id=organization_id, name=name, last_value=0))
     db.flush()
 
 
@@ -143,6 +144,12 @@ def seed_demo_data(db: Session) -> None:
 
 def seed_database() -> None:
     with SessionLocal() as db:
+        organization = db.get(Organization, 1)
+        if organization is None:
+            organization = Organization(id=1, name="Default Organization", slug="default")
+            db.add(organization)
+            db.flush()
+        set_tenant_context(db, organization.id)
         ensure_sequences(db)
         ensure_chart(db)
         ensure_admin(db)

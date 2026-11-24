@@ -31,6 +31,9 @@ def run_migrations_offline() -> None:
 def run_migrations_online() -> None:
     engine = make_engine(_url())
     with engine.connect() as connection:
+        if connection.dialect.name == "sqlite":
+            # Batch table rebuilds in tenant migrations must preserve dependent foreign keys.
+            connection.exec_driver_sql("PRAGMA foreign_keys=OFF")
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
@@ -39,6 +42,8 @@ def run_migrations_online() -> None:
         )
         with context.begin_transaction():
             context.run_migrations()
+        if connection.dialect.name == "sqlite":
+            connection.exec_driver_sql("PRAGMA foreign_keys=ON")
     engine.dispose()
 
 

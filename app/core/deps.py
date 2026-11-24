@@ -5,7 +5,7 @@ import jwt
 from fastapi import Depends, Request
 from sqlalchemy.orm import Session
 
-from app.core.database import get_db
+from app.core.database import get_db, set_tenant_context
 from app.core.enums import Role
 from app.core.errors import AuthenticationError, PermissionDenied
 from app.core.security import decode_access_token
@@ -42,6 +42,7 @@ def get_current_user(request: Request, db: DbSession) -> User:
     user = db.get(User, user_id)
     if user is None or not user.is_active:
         raise AuthenticationError("Account is disabled or no longer exists")
+    set_tenant_context(db, user.organization_id)
     return user
 
 

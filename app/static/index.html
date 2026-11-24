@@ -21,6 +21,22 @@
       <input id="login-password" name="password" type="password" autocomplete="current-password" required>
       <p id="login-error" class="error" role="alert"></p>
       <button type="submit" class="primary">Sign in</button>
+      <button id="show-register" type="button" class="ghost">Create a company account</button>
+    </form>
+    <form id="register-form" class="login-card" autocomplete="on" hidden>
+      <h1>Create your workspace</h1>
+      <p class="muted">Your company gets a separate accounting workspace and chart of accounts.</p>
+      <label for="register-company">Company name</label>
+      <input id="register-company" name="company_name" required minlength="2" maxlength="160" autocomplete="organization">
+      <label for="register-name">Your full name</label>
+      <input id="register-name" name="full_name" required minlength="2" maxlength="120" autocomplete="name">
+      <label for="register-email">Work email</label>
+      <input id="register-email" name="email" type="email" required autocomplete="email">
+      <label for="register-password">Password (12+ characters)</label>
+      <input id="register-password" name="password" type="password" required minlength="12" maxlength="128" autocomplete="new-password">
+      <p id="register-error" class="error" role="alert"></p>
+      <button type="submit" class="primary">Create workspace</button>
+      <button id="show-login" type="button" class="ghost">Back to sign in</button>
     </form>
   </main>
 

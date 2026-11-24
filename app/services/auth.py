@@ -5,6 +5,8 @@ from typing import Optional
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
+from app.core.database import set_tenant_context
+
 from app.core import clock
 from app.core.config import settings
 from app.core.errors import AuthenticationError, ConflictError, TooManyRequests
@@ -48,6 +50,7 @@ def authenticate(db: Session, email: str, password: str, ip: str) -> User:
     if not ok or user is None:
         db.commit()
         raise AuthenticationError("Invalid email or password")
+    set_tenant_context(db, user.organization_id)
     if password_needs_rehash(user.password_hash):
         user.password_hash = hash_password(password)
     log_audit(db, user.email, "LOGIN", f"user:{user.id}", "Signed in")
@@ -124,6 +127,7 @@ def rotate_refresh_token(db: Session, raw: str) -> tuple[User, str]:
     user = db.get(User, user_id)
     if user is None or not user.is_active:
         raise AuthenticationError("Account is disabled")
+    set_tenant_context(db, user.organization_id)
     return user, create_refresh_token(db, user.id, family_id)
 
 

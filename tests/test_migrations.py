@@ -55,8 +55,8 @@ def test_migration_installs_append_only_triggers(tmp_path):
     with engine.begin() as connection:
         connection.execute(
             text(
-                "INSERT INTO audit_logs (seq, actor, action, entity, details, created_at, prev_hash, row_hash) "
-                "VALUES (1, 'a', 'X', 'e', 'd', '2026-01-01 00:00:00', 'p', 'h')"
+                "INSERT INTO audit_logs (organization_id, seq, actor, action, entity, details, created_at, prev_hash, row_hash) "
+                "VALUES (1, 1, 'a', 'X', 'e', 'd', '2026-01-01 00:00:00', 'p', 'h')"
             )
         )
     with pytest.raises(DBAPIError):
@@ -70,14 +70,14 @@ def test_migration_protects_audit_sequence_high_water_mark(tmp_path):
     migrated_engine = create_engine(url)
     with migrated_engine.begin() as connection:
         connection.execute(
-            text("INSERT INTO document_sequences (name, last_value) VALUES ('AUDIT', 5)")
+            text("INSERT INTO document_sequences (organization_id, name, last_value) VALUES (1, 'AUDIT', 5)")
         )
     with pytest.raises(DBAPIError):
         with migrated_engine.begin() as connection:
             connection.execute(
-                text("UPDATE document_sequences SET last_value = 0 WHERE name = 'AUDIT'")
+                text("UPDATE document_sequences SET last_value = 0 WHERE organization_id = 1 AND name = 'AUDIT'")
             )
     with pytest.raises(DBAPIError):
         with migrated_engine.begin() as connection:
-            connection.execute(text("DELETE FROM document_sequences WHERE name = 'AUDIT'"))
+            connection.execute(text("DELETE FROM document_sequences WHERE organization_id = 1 AND name = 'AUDIT'"))
     migrated_engine.dispose()
