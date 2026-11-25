@@ -8,13 +8,14 @@ from pydantic import (
     EmailStr,
     Field,
     PlainSerializer,
+    field_validator,
     model_validator,
 )
 
 from app.core import clock
 from app.core.config import settings
-from app.core.currencies import validate_currency_code
 from app.core.constants import PERIOD_PATTERN
+from app.core.currencies import validate_currency_code
 from app.core.enums import AccountType, Role
 
 T = TypeVar("T")
