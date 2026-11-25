@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.core import clock
 from app.core.config import settings
+from app.core.currencies import is_active_currency_code
 from app.core.constants import ACC_AR, ACC_CASH, ACC_FX, ACC_REVENUE, ACC_TAX_PAYABLE, SEQ_INVOICE
 from app.core.enums import OVERDUE, EntrySource, InvoiceStatus
 from app.core.errors import (
@@ -117,6 +118,10 @@ def create_invoice(
     due_date: date,
     actor: str,
 ) -> Invoice:
+    if not is_active_currency_code(currency):
+        raise LedgerValidationError(
+            f"'{currency}' is not an active ISO 4217 currency code"
+        )
     today = clock.today()
     if due_date < today:
         raise LedgerValidationError("due_date cannot be in the past")
