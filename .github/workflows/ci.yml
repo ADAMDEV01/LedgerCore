@@ -25,8 +25,8 @@ jobs:
       SECRET_KEY: ci-only-secret-key-ci-only-secret-key-0123456789
       TEST_DATABASE_URL: postgresql+psycopg://ledger:ledger@localhost:5432/ledgercore_test
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: pip
@@ -92,8 +92,8 @@ jobs:
     env:
       SECRET_KEY: ci-only-secret-key-ci-only-secret-key-0123456789
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: pip
@@ -105,7 +105,7 @@ jobs:
         run: pytest -q e2e -o addopts=''
       - name: Upload browser screenshots
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ledgercore-browser-screenshots
           path: docs/screenshots/*.png
@@ -115,7 +115,7 @@ jobs:
     needs: [test, frontend]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Build and smoke-test the compose stack
         run: |
           set -Eeuo pipefail
