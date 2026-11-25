@@ -8,8 +8,8 @@ from sqlalchemy.orm import Session
 
 from app.core import clock
 from app.core.config import settings
-from app.core.currencies import is_active_currency_code
 from app.core.constants import ACC_AR, ACC_CASH, ACC_FX, ACC_REVENUE, ACC_TAX_PAYABLE, SEQ_INVOICE
+from app.core.currencies import is_active_currency_code
 from app.core.enums import OVERDUE, EntrySource, InvoiceStatus
 from app.core.errors import (
     ConflictError,
