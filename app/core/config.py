@@ -3,6 +3,8 @@ from typing import Literal, Optional
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from app.core.currencies import is_active_currency_code
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
@@ -34,6 +36,8 @@ class Settings(BaseSettings):
     def _reject_placeholder_secret(self) -> "Settings":
         if "REPLACE" in self.SECRET_KEY.upper():
             raise ValueError("SECRET_KEY still contains the placeholder value")
+        if not is_active_currency_code(self.BASE_CURRENCY):
+            raise ValueError("BASE_CURRENCY must be an active ISO 4217 currency code.")
         if self.ENVIRONMENT == "production" and self.COOKIE_SECURE is False:
             raise ValueError("COOKIE_SECURE=false is not allowed in production")
         if self.ENVIRONMENT == "production" and not self.DATABASE_URL.startswith(
