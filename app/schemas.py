@@ -12,6 +12,7 @@ from pydantic import (
 )
 
 from app.core import clock
+from app.core.config import settings
 from app.core.constants import PERIOD_PATTERN
 from app.core.enums import AccountType, Role
 
