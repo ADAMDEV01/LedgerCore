@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     # Required: the app refuses to start without a strong key. No default on purpose.
     SECRET_KEY: str = Field(min_length=32)
     DATABASE_URL: str = "sqlite:///./data/ledgercore.db"
-    BASE_CURRENCY: str = "USD"
+    BASE_CURRENCY: str = Field(default="USD", pattern=r"^[A-Z]{3}$")
 
     ACCESS_TOKEN_MINUTES: int = 15
     REFRESH_TOKEN_DAYS: int = 7
