@@ -150,7 +150,7 @@ class JournalEntryOut(BaseModel):
 class InvoiceCreate(BaseModel):
     client_name: str = Field(min_length=2, max_length=160)
     client_email: Optional[EmailStr] = None
-    currency: str = Field(default="USD", pattern=r"^[A-Z]{3}$")
+    currency: str = Field(default_factory=lambda: settings.BASE_CURRENCY, pattern=r"^[A-Z]{3}$")
     exchange_rate: RateIn = Decimal("1")
     amount: MoneyIn
     tax_rate: Annotated[Decimal, Field(ge=0, le=100, max_digits=5, decimal_places=2)] = Decimal("0")
