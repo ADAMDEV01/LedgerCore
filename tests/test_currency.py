@@ -47,7 +47,7 @@ def test_base_currency_requires_an_active_iso4217_code(code):
     assert settings.BASE_CURRENCY == code
 
 
-@pytest.mark.parametrize("code", ["ZZZ", "BGN", "XXX", "usd"])
+@pytest.mark.parametrize("code", ["ZZZ", "BGN", "XXX"])
 def test_base_currency_rejects_unknown_or_historical_codes(code):
     with pytest.raises(ValidationError, match="active ISO 4217"):
         Settings(
@@ -55,4 +55,15 @@ def test_base_currency_rejects_unknown_or_historical_codes(code):
             SECRET_KEY="test-secret-value-that-is-longer-than-32-bytes",
             ENVIRONMENT="test",
             BASE_CURRENCY=code,
+        )
+
+
+
+def test_base_currency_still_requires_uppercase_alpha_code():
+    with pytest.raises(ValidationError):
+        Settings(
+            _env_file=None,
+            SECRET_KEY="test-secret-value-that-is-longer-than-32-bytes",
+            ENVIRONMENT="test",
+            BASE_CURRENCY="usd",
         )
