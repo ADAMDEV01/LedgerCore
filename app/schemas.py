@@ -13,6 +13,7 @@ from pydantic import (
 
 from app.core import clock
 from app.core.config import settings
+from app.core.currencies import validate_currency_code
 from app.core.constants import PERIOD_PATTERN
 from app.core.enums import AccountType, Role
 
@@ -156,6 +157,12 @@ class InvoiceCreate(BaseModel):
     amount: MoneyIn
     tax_rate: Annotated[Decimal, Field(ge=0, le=100, max_digits=5, decimal_places=2)] = Decimal("0")
     due_date: date
+
+    @field_validator("currency")
+    @classmethod
+    def active_iso4217_currency(cls, value: str) -> str:
+        return validate_currency_code(value)
+
 
 
 class PaymentCreate(BaseModel):
