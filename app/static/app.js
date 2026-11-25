@@ -3,7 +3,7 @@
 /* LedgerCore SPA. All dynamic text is inserted with textContent, never innerHTML,
    so API data cannot inject markup (the CSP also forbids inline scripts). */
 
-const BASE_CURRENCY = "USD"; // mirrors the server's BASE_CURRENCY setting
+let BASE_CURRENCY = "USD";
 const state = { user: null, view: "dashboard", accounts: [], navigationId: 0, dataVersion: 0 };
 const viewCache = new Map();
 const readCache = new Map();
@@ -285,13 +285,26 @@ $("#register-form").addEventListener("submit", async (event) => {
       },
     });
     state.user = data.user;
-    showShell();
+    await showShell();
   } catch (err) {
     $("#register-error").textContent = err.message;
   }
 });
 
-function showShell() {
+async function ensureServerSettings() {
+  const serverSettings = await api("/settings");
+  if (
+    !serverSettings
+    || typeof serverSettings.base_currency !== "string"
+    || !/^[A-Z]{3}$/.test(serverSettings.base_currency)
+  ) {
+    throw new Error("The server returned an invalid base-currency setting.");
+  }
+  BASE_CURRENCY = serverSettings.base_currency;
+}
+
+async function showShell() {
+  await ensureServerSettings();
   $("#login").hidden = true;
   $("#shell").hidden = false;
   $("#whoami").textContent = `${state.user.full_name} (${state.user.role})`;
@@ -902,5 +915,10 @@ const RENDERERS = {
       return;
     }
   }
-  showShell();
+  try {
+    await showShell();
+  } catch (error) {
+    showLogin();
+    $("#login-error").textContent = error instanceof Error ? error.message : "Could not load server settings.";
+  }
 })();
