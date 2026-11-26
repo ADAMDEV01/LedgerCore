@@ -8,7 +8,7 @@ Balances are derived, never stored. Ledger rows cannot be edited. The audit trai
 ## What it does
 
 - **Double-entry journal.** Every entry must balance to the cent. Corrections are reversal entries, never edits. An entry can be reversed at most once (enforced by a unique constraint, not just code).
-- **Invoicing with multi-currency.** Tax, partial payments, voiding, and **realized FX gain/loss** when a payment is received at a different rate than the invoice was issued at. Invoice and base currencies are checked against the SIX List One snapshot, accepting only current currency entries with a defined minor-unit exponent. Funds, precious metals, bond-market units, special accounting units, test codes, and historical/no-currency codes are rejected.
+- **Invoicing with multi-currency.** Tax, partial payments, voiding, and **realized FX gain/loss** when a payment is received at a different rate than the invoice was issued at. Invoice and base currencies are checked against the SIX List One snapshot, accepting only current currencies with exactly two minor-unit digits, matching the fixed two-decimal accounting schema. Funds, precious metals, bond-market units, special accounting units, test codes, and historical/no-currency codes are rejected.
 - **Reports.** Trial balance (with CSV export), income statement, balance sheet. Dashboard with monthly revenue vs expenses.
 - **Accounting periods.** The CFO can close a period; postings into a closed period are rejected.
 - **Roles.** `VIEWER` (read), `ACCOUNTANT` (post, invoice, record payments), `CFO` (reverse, void, close periods, manage users, read audit trail).
@@ -34,7 +34,7 @@ subclasses (no FastAPI imports), and the database enforces the invariants that m
 |---|---|
 | **Balances are computed from `ledger_lines`**, no stored balance column | Removes an entire class of race conditions and drift bugs. |
 | **`Decimal` end to end**, `Numeric(14,2)`, input rejects more than 2 decimal places | `10.005` is a validation error, never silently rounded into an unbalanced entry. |
-| **Active ISO 4217 currency registry** for invoices and `BASE_CURRENCY` | The registry is generated from the published SIX List One snapshot and includes only non-fund currency entries with a defined minor-unit exponent. |
+| **Active ISO 4217 currency registry** for invoices and `BASE_CURRENCY` | The registry is generated from the published SIX List One snapshot and includes only non-fund currencies with exactly two minor-unit digits, matching LedgerCore's fixed `NUMERIC(14,2)` money model. Zero-, three-, and four-decimal currencies remain unsupported until the data model and validation rules are upgraded together. |
 | **Ledger immutability and entry seals**: ORM listeners, database triggers, and no update/delete endpoints; a sealed entry rejects later line inserts. | Posted entries cannot be extended after approval, including through raw SQL. |
 | **Deferred PostgreSQL balance constraint**: each journal entry must be sealed and contain at least two lines whose debit and credit totals match at commit. | An application bug or raw SQL cannot commit an incomplete or unbalanced entry. |
 | **Idempotent financial writes**: actor + operation + `Idempotency-Key` + canonical request hash, with the response stored in the same transaction. | A retry after a lost response returns the original result instead of posting twice. |
