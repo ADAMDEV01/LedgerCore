@@ -1,8 +1,9 @@
+import hashlib
 import uuid
 from datetime import timedelta
 from typing import Optional
 
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, select, text, update
 from sqlalchemy.orm import Session
 
 from app.core import clock
@@ -21,9 +22,59 @@ from app.models import LoginAttempt, RefreshToken, User
 from app.services.audit import log_audit
 
 
+LOGIN_ATTEMPT_RETENTION = timedelta(days=30)
+LOGIN_ATTEMPT_CLEANUP_BATCH_SIZE = 500
+LOGIN_ATTEMPT_CLEANUP_LOCK_ID = 7_214_095_031
+
+
+def _login_advisory_lock_id(scope: str, value: str) -> int:
+    digest = hashlib.blake2b(
+        f"ledgercore:login:{scope}:{value}".encode("utf-8"),
+        digest_size=8,
+    ).digest()
+    return int.from_bytes(digest, byteorder="big", signed=True)
+
+
+def _prune_old_login_attempts(db: Session, now) -> None:
+    """Delete a bounded batch of expired throttle rows without blocking login traffic."""
+    if db.get_bind().dialect.name == "postgresql":
+        acquired = db.scalar(
+            text("SELECT pg_try_advisory_xact_lock(:lock_id)"),
+            {"lock_id": LOGIN_ATTEMPT_CLEANUP_LOCK_ID},
+        )
+        if not acquired:
+            return
+
+    expired_ids = db.scalars(
+        select(LoginAttempt.id)
+        .where(LoginAttempt.attempted_at < now - LOGIN_ATTEMPT_RETENTION)
+        .order_by(LoginAttempt.attempted_at, LoginAttempt.id)
+        .limit(LOGIN_ATTEMPT_CLEANUP_BATCH_SIZE)
+    ).all()
+    if expired_ids:
+        db.execute(delete(LoginAttempt).where(LoginAttempt.id.in_(expired_ids)))
+
+
 def check_login_allowed(db: Session, email: str, ip: str) -> None:
-    """Database-backed throttle: counts recent failures per email and per IP."""
-    since = clock.utcnow() - timedelta(minutes=settings.LOGIN_WINDOW_MINUTES)
+    """Serialize per-email and per-IP checks so parallel logins cannot exceed the limit."""
+    now = clock.utcnow()
+    if db.get_bind().dialect.name == "postgresql":
+        # Acquire deterministic transaction-scoped locks in sorted order. All requests
+        # sharing an email or IP serialize until their attempt record is committed.
+        lock_ids = sorted(
+            {
+                _login_advisory_lock_id("email", email),
+                _login_advisory_lock_id("ip", ip),
+            }
+        )
+        for lock_id in lock_ids:
+            db.execute(
+                text("SELECT pg_advisory_xact_lock(:lock_id)"),
+                {"lock_id": lock_id},
+            )
+
+    _prune_old_login_attempts(db, now)
+    since = now - timedelta(minutes=settings.LOGIN_WINDOW_MINUTES)
     base = select(func.count()).select_from(LoginAttempt)
     base = base.where(LoginAttempt.succeeded.is_(False), LoginAttempt.attempted_at >= since)
     by_email = db.scalar(base.where(LoginAttempt.email == email)) or 0
