@@ -67,6 +67,7 @@ class LoginAttempt(Base):
     __table_args__ = (
         Index("ix_login_attempts_email_attempted_at", "email", "attempted_at"),
         Index("ix_login_attempts_ip_attempted_at", "ip", "attempted_at"),
+        Index("ix_login_attempts_attempted_at", "attempted_at"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)

@@ -1,7 +1,11 @@
+from concurrent.futures import ThreadPoolExecutor
+from uuid import uuid4
+
 import pytest
 
-from app.core.errors import AuthenticationError
-from app.models import User
+from app.core.database import SessionLocal, engine
+from app.core.errors import AuthenticationError, TooManyRequests
+from app.models import LoginAttempt, User
 from app.services import auth as auth_service
 from tests.helpers import API, PASSWORD, create_user, login, make_client
 
@@ -123,3 +127,55 @@ def test_production_rejects_insecure_cookie_configuration():
 
     with pytest.raises(ValidationError, match="COOKIE_SECURE=false"):
         Settings(SECRET_KEY="a-strong-enough-secret-key-for-test-only", ENVIRONMENT="production", COOKIE_SECURE=False)
+
+def test_expired_login_attempts_are_pruned_in_bounded_batches(db):
+    from datetime import timedelta
+
+    from app.core import clock
+
+    now = clock.utcnow()
+    expired = LoginAttempt(
+        email="expired@ledgertest.io",
+        ip="192.0.2.200",
+        succeeded=False,
+        attempted_at=now - timedelta(days=31),
+    )
+    recent = LoginAttempt(
+        email="recent@ledgertest.io",
+        ip="192.0.2.201",
+        succeeded=False,
+        attempted_at=now - timedelta(minutes=1),
+    )
+    db.add_all([expired, recent])
+    db.commit()
+    expired_id = expired.id
+    recent_id = recent.id
+
+    auth_service.check_login_allowed(db, "new@ledgertest.io", "192.0.2.202")
+    db.commit()
+
+    assert db.get(LoginAttempt, expired_id) is None
+    assert db.get(LoginAttempt, recent_id) is not None
+
+
+@pytest.mark.skipif(engine.dialect.name != "postgresql", reason="PostgreSQL advisory locks are used in production")
+def test_login_throttle_cannot_be_exceeded_by_concurrent_failures():
+    email = f"parallel-{uuid4().hex}@ledgertest.io"
+    ip = "192.0.2.203"
+
+    def attempt(_index: int) -> str:
+        with SessionLocal() as session:
+            try:
+                auth_service.authenticate(session, email, "incorrect-password", ip)
+            except TooManyRequests:
+                return "limited"
+            except AuthenticationError:
+                return "denied"
+        raise AssertionError("An unknown-email login must never authenticate")
+
+    with ThreadPoolExecutor(max_workers=12) as executor:
+        outcomes = list(executor.map(attempt, range(12)))
+
+    assert outcomes.count("denied") == 5
+    assert outcomes.count("limited") == 7
+
