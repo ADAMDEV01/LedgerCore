@@ -1,6 +1,6 @@
 import hashlib
 import uuid
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Optional
 
 from sqlalchemy import delete, func, select, text, update
@@ -35,7 +35,7 @@ def _login_advisory_lock_id(scope: str, value: str) -> int:
     return int.from_bytes(digest, byteorder="big", signed=True)
 
 
-def _prune_old_login_attempts(db: Session, now) -> None:
+def _prune_old_login_attempts(db: Session, now: datetime) -> None:
     """Delete a bounded batch of expired throttle rows without blocking login traffic."""
     if db.get_bind().dialect.name == "postgresql":
         acquired = db.scalar(
