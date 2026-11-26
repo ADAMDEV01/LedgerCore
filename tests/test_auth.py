@@ -5,8 +5,7 @@ import pytest
 
 from app.core.database import SessionLocal, engine
 from app.core.errors import AuthenticationError, TooManyRequests
-from app.models import LoginAttempt
-from app.models import User
+from app.models import LoginAttempt, User
 from app.services import auth as auth_service
 from tests.helpers import API, PASSWORD, create_user, login, make_client
 
