@@ -1,7 +1,8 @@
-import hashlib
-import uuid
 from datetime import datetime, timedelta
+
+import hashlib
 from typing import Optional
+import uuid
 
 from sqlalchemy import delete, func, select, text, update
 from sqlalchemy.orm import Session
@@ -20,7 +21,6 @@ from app.core.security import (
 )
 from app.models import LoginAttempt, RefreshToken, User
 from app.services.audit import log_audit
-
 
 LOGIN_ATTEMPT_RETENTION = timedelta(days=30)
 LOGIN_ATTEMPT_CLEANUP_BATCH_SIZE = 500
