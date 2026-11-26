@@ -29,7 +29,7 @@ LOGIN_ATTEMPT_CLEANUP_LOCK_ID = 7_214_095_031
 
 def _login_advisory_lock_id(scope: str, value: str) -> int:
     digest = hashlib.blake2b(
-        f"ledgercore:login:{scope}:{value}".encode("utf-8"),
+        f"ledgercore:login:{scope}:{value}".encode(),
         digest_size=8,
     ).digest()
     return int.from_bytes(digest, byteorder="big", signed=True)
