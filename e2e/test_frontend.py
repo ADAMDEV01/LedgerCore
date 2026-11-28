@@ -107,8 +107,9 @@ def test_admin_can_post_a_balanced_entry_from_the_browser(browser: Browser, app_
     screenshots = ROOT / "docs" / "screenshots"
     screenshots.mkdir(parents=True, exist_ok=True)
     page.screenshot(path=str(screenshots / "dashboard.png"), full_page=True)
-    page.get_by_role("button", name="Journal", exact=True).click()
-    page.get_by_role("button", name="New entry").click()
+    assert page.get_by_text("Base currency: USD").is_visible() or page.locator(".context-pill").filter(has_text="Base currency:").count() == 1
+    assert page.locator(".context-pill").count() == 2
+    page.get_by_role("button", name="New journal entry", exact=True).click()
 
     page.locator("select[aria-label='Account']").nth(0).select_option(label="1000 · Operating Cash")
     page.locator("select[aria-label='Account']").nth(1).select_option(label="3000 · Owner's Capital")
@@ -126,12 +127,18 @@ def test_admin_can_post_a_balanced_entry_from_the_browser(browser: Browser, app_
     page.close()
 
 
-def test_demo_viewer_is_read_only_and_mobile_layout_fits(browser: Browser, app_url: str) -> None:
-    page = browser.new_page(viewport={"width": 390, "height": 844}, device_scale_factor=1)
+def test_demo_viewer_is_read_only_and_mobile_drawer_fits(browser: Browser, app_url: str) -> None:
+    page = browser.new_page(viewport={"width": 375, "height": 844}, device_scale_factor=1)
     sign_in(page, app_url, DEMO_EMAIL, DEMO_PASSWORD)
     assert page.locator("#role-banner").is_visible()
+    menu = page.get_by_role("button", name="Open navigation")
+    assert menu.is_visible()
+    menu.click()
+    assert "mobile-open" in page.locator(".rail").get_attribute("class")
     page.get_by_role("button", name="Journal", exact=True).click()
     assert page.get_by_role("button", name="New entry").count() == 0
+    assert "mobile-open" not in page.locator(".rail").get_attribute("class")
+    menu.click()
     page.get_by_role("button", name="Invoices", exact=True).click()
     assert page.get_by_role("button", name="New invoice").count() == 0
     assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")

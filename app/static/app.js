@@ -309,7 +309,7 @@ async function showShell() {
   $("#shell").hidden = false;
   const name = state.user.full_name.trim();
   $("#account-label").textContent = name;
-  $("#account-avatar").textContent = name.split(/\\s+/).map((part) => part[0]).slice(0, 2).join("").toUpperCase();
+  $("#account-avatar").textContent = name.split(/\s+/).map((part) => part[0]).slice(0, 2).join("").toUpperCase();
   $("#whoami").textContent = `${state.user.role} account`;
   $("#role-banner").hidden = state.user.role !== "VIEWER";
   buildNav();
