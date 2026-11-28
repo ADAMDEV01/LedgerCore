@@ -107,7 +107,9 @@ def test_admin_can_post_a_balanced_entry_from_the_browser(browser: Browser, app_
     screenshots = ROOT / "docs" / "screenshots"
     screenshots.mkdir(parents=True, exist_ok=True)
     page.screenshot(path=str(screenshots / "dashboard.png"), full_page=True)
-    assert page.get_by_text("Base currency: USD").is_visible() or page.locator(".context-pill").filter(has_text="Base currency:").count() == 1
+    currency_context = page.locator(".context-pill").filter(has_text="Base currency:")
+    assert currency_context.count() == 1
+    assert currency_context.is_visible()
     assert page.locator(".context-pill").count() == 2
     page.get_by_role("button", name="New journal entry", exact=True).click()
 
