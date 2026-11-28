@@ -5,7 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#102b32">
   <meta name="description" content="LedgerCore — secure double-entry accounting and a tamper-evident audit trail.">
-  <title>LedgerCore</title>
+  <title>LedgerCore · Accounting workspace</title>
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
   <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
@@ -52,11 +53,29 @@
           <div class="proof-row proof-cr"><span>Credits</span><span id="proof-cr">0.00</span></div>
           <div id="proof-state" class="proof-state">Checking…</div>
         </div>
-        <div id="whoami" class="whoami"></div>
-        <button id="logout" type="button" class="ghost">Sign out</button>
+        <details id="account-menu" class="account-menu">
+          <summary id="account-trigger" aria-label="Account menu" title="Account menu">
+            <span id="account-avatar" class="account-avatar">LC</span>
+            <span class="account-copy"><strong id="account-label">Account</strong><small id="whoami">Signed in</small></span>
+            <span class="account-chevron" aria-hidden="true">⌄</span>
+          </summary>
+          <div class="account-popover"><button id="logout" type="button" class="ghost">Sign out</button></div>
+        </details>
       </div>
     </aside>
-    <main id="view" tabindex="-1" aria-live="polite" aria-busy="false"></main>
+    <button id="nav-overlay" class="nav-overlay" type="button" aria-label="Close navigation" hidden></button>
+    <div id="workspace-main">
+      <header class="app-toolbar">
+        <button id="mobile-menu" type="button" class="toolbar-icon" aria-label="Open navigation">☰</button>
+        <div class="breadcrumb"><span>Workspace</span><span aria-hidden="true">/</span><strong id="current-location">Dashboard</strong></div>
+        <div class="toolbar-actions">
+          <button id="command-button" type="button" class="command-button" aria-label="Search pages">Search pages <kbd>⌘ K</kbd></button>
+          <span id="last-updated" class="last-updated">Not refreshed yet</span>
+          <button id="refresh-view" type="button" class="small refresh-view" title="Refresh current page">Refresh</button>
+        </div>
+      </header>
+      <main id="view" tabindex="-1" aria-live="polite" aria-busy="false"></main>
+    </div>
   </div>
 
   <script src="/static/app.js" defer></script>

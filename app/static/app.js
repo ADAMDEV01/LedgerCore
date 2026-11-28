@@ -307,7 +307,10 @@ async function showShell() {
   await ensureServerSettings();
   $("#login").hidden = true;
   $("#shell").hidden = false;
-  $("#whoami").textContent = `${state.user.full_name} (${state.user.role})`;
+  const name = state.user.full_name.trim();
+  $("#account-label").textContent = name;
+  $("#account-avatar").textContent = name.split(/\s+/).map((part) => part[0]).slice(0, 2).join("").toUpperCase();
+  $("#whoami").textContent = `${state.user.role} account`;
   $("#role-banner").hidden = state.user.role !== "VIEWER";
   buildNav();
   go(state.view);
@@ -348,12 +351,82 @@ const VIEWS = [
   ["users", "Users", isCfo],
 ];
 
+const NAV_GROUPS = [
+  { label: "Workspace", ids: ["dashboard", "journal", "invoices", "accounts", "reports"] },
+  { label: "Admin", ids: ["periods", "audit", "users"] },
+];
+const NAV_GLYPHS = {
+  dashboard: "M3 3h8v8H3z M13 3h8v5h-8z M13 10h8v11h-8z M3 13h8v8H3z",
+  journal: "M5 3h14v18H5z M8 7h8 M8 11h8 M8 15h5",
+  invoices: "M6 3h9l4 4v14H6z M15 3v5h4 M9 12h7 M9 16h7",
+  accounts: "M3 9h18L12 4 3 9z M5 10v8 M9 10v8 M15 10v8 M19 10v8 M3 19h18",
+  reports: "M4 20V11 M10 20V5 M16 20v-8 M22 20H2",
+  periods: "M4 5h16v16H4z M8 3v4 M16 3v4 M4 10h16",
+  audit: "M12 3 4 6v5c0 5 3.4 8.2 8 10 4.6-1.8 8-5 8-10V6z M8 12l2.5 2.5L16 9",
+  users: "M16 20v-1.5a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4V20 M9.5 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z M17 4.5a3.5 3.5 0 0 1 0 6.8 M17 14.5a4 4 0 0 1 3 3.8V20",
+};
+
 function buildNav() {
   const nav = $("#nav");
-  nav.replaceChildren(
-    ...VIEWS.filter(([, , allowed]) => allowed()).map(([id, label]) =>
-      h("button", { type: "button", "data-view": id, text: label, onclick: () => go(id) })),
-  );
+  const allowed = new Map(VIEWS.filter(([, , canSee]) => canSee()).map(([id, label]) => [id, label]));
+  const groups = NAV_GROUPS.map((group) => {
+    const items = group.ids.filter((id) => allowed.has(id));
+    if (!items.length) return null;
+    return h("section", { class: "nav-group", "aria-label": group.label },
+      h("div", { class: "nav-heading", text: group.label }),
+      ...items.map((id) => h("button", {
+        type: "button", "data-view": id, "aria-label": allowed.get(id),
+        onclick: () => { setMobileNav(false); go(id); },
+      }, h("svg", { viewBox: "0 0 24 24", class: "nav-icon", fill: "none", stroke: "currentColor", "stroke-width": "1.7", "stroke-linecap": "round", "stroke-linejoin": "round", "aria-hidden": "true" },
+        h("path", { d: NAV_GLYPHS[id] })), h("span", { text: allowed.get(id) }))));
+  }).filter(Boolean);
+  nav.replaceChildren(...groups);
+}
+
+function setMobileNav(open) {
+  const rail = document.querySelector(".rail");
+  rail.classList.toggle("mobile-open", open);
+  $("#nav-overlay").hidden = !open;
+  $("#mobile-menu").setAttribute("aria-expanded", String(open));
+}
+
+$("#mobile-menu").addEventListener("click", () => setMobileNav(true));
+$("#nav-overlay").addEventListener("click", () => setMobileNav(false));
+$("#refresh-view").addEventListener("click", () => go(state.view, true));
+$("#command-button").addEventListener("click", openCommandPalette);
+window.addEventListener("keydown", (event) => {
+  if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+    event.preventDefault();
+    openCommandPalette();
+  }
+  if (event.key === "Escape") setMobileNav(false);
+});
+
+function openCommandPalette() {
+  let dialog = document.querySelector("#quick-search");
+  if (!dialog) {
+    dialog = h("dialog", { id: "quick-search", class: "quick-search", "aria-label": "Search pages" });
+    const input = h("input", { type: "search", placeholder: "Search pages…", "aria-label": "Search pages" });
+    const results = h("div", { class: "quick-search-results" });
+    const render = () => {
+      const query = input.value.trim().toLowerCase();
+      const pages = VIEWS.filter(([, , allowed]) => allowed()).filter(([, label]) => label.toLowerCase().includes(query));
+      results.replaceChildren(...pages.map(([id, label]) => h("button", {
+        type: "button", class: "quick-search-item", onclick: () => { dialog.close(); go(id); },
+      }, label)));
+      if (!pages.length) results.replaceChildren(h("p", { class: "muted", text: "No matching pages." }));
+    };
+    input.addEventListener("input", render);
+    dialog.addEventListener("click", (event) => { if (event.target === dialog) dialog.close(); });
+    dialog.append(h("div", { class: "quick-search-heading", text: "Jump to a page" }), input, results);
+    document.body.append(dialog);
+    render();
+    dialog._searchInput = input;
+  }
+  if (!dialog.open) dialog.showModal();
+  dialog._searchInput.value = "";
+  dialog._searchInput.dispatchEvent(new Event("input"));
+  dialog._searchInput.focus();
 }
 
 function hasUnsubmittedChanges(root) {
@@ -368,9 +441,11 @@ function hasUnsubmittedChanges(root) {
   });
 }
 
-async function go(view) {
+async function go(view, forceRefresh = false) {
   state.view = view;
   const navigationId = ++state.navigationId;
+  const selectedView = VIEWS.find(([id]) => id === view);
+  $("#current-location").textContent = selectedView?.[1] ?? "Workspace";
   for (const b of document.querySelectorAll("#nav button")) {
     if (b.dataset.view === view) b.setAttribute("aria-current", "page");
     else b.removeAttribute("aria-current");
@@ -383,7 +458,7 @@ async function go(view) {
     root.replaceChildren(cached.node);
     if (typeof cached.node.activate === "function") cached.node.activate();
     root.setAttribute("aria-busy", "false");
-    if (Date.now() - cached.updatedAt < VIEW_CACHE_TTL_MS) {
+    if (!forceRefresh && Date.now() - cached.updatedAt < VIEW_CACHE_TTL_MS) {
       refreshProof();
       return;
     }
@@ -391,7 +466,7 @@ async function go(view) {
     root.setAttribute("aria-busy", "true");
     // Keep the current section visible while an uncached first visit is prepared.
     if (!root.firstElementChild) {
-      root.replaceChildren(h("p", { class: "muted", text: "Loading…" }));
+      root.replaceChildren(h("div", { class: "loading-skeletons", "aria-label": "Loading page" }, ...Array.from({ length: 3 }, () => h("div", { class: "loading-skeleton" }))));
     }
   }
 
@@ -412,7 +487,10 @@ async function go(view) {
     if (!cached) root.replaceChildren(h("p", { class: "error", text: err.message }));
     else toast("Showing the last loaded data; refresh failed.", "bad");
   } finally {
-    if (navigationId === state.navigationId) root.setAttribute("aria-busy", "false");
+    if (navigationId === state.navigationId) {
+      root.setAttribute("aria-busy", "false");
+      $("#last-updated").textContent = `Updated ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+    }
   }
   refreshProof();
   if (state.user && view === "dashboard") void prefetchViews();
@@ -477,8 +555,9 @@ async function refreshProof(force = false) {
       $("#proof-dr").textContent = fmt(tb.total_debit);
       $("#proof-cr").textContent = fmt(tb.total_credit);
       const state_ = $("#proof-state");
-      state_.textContent = tb.is_balanced ? "Balanced" : "OUT OF BALANCE";
+      state_.replaceChildren(document.createTextNode(tb.is_balanced ? "Balanced" : "OUT OF BALANCE"));
       state_.className = tb.is_balanced ? "proof-state" : "proof-state bad";
+      if (!tb.is_balanced) state_.append(h("button", { type: "button", class: "proof-review", text: "Review issue", onclick: () => go("reports") }));
     } catch (_) {
       /* The proof is advisory; retry after the short backoff. */
     } finally {
@@ -523,7 +602,14 @@ async function act(promise, success) {
 
 /* ---------- dashboard ---------- */
 function barChart(data) {
-  const W = 640, H = 230, pad = { l: 64, r: 10, t: 10, b: 28 };
+  const hasActivity = data.some((row) => Number(row.revenue) !== 0 || Number(row.expenses) !== 0);
+  if (!hasActivity) {
+    return h("div", { class: "chart-empty-state", role: "status" },
+      h("strong", { text: "No transactions yet" }),
+      h("p", { class: "muted", text: "Post your first journal entry to see revenue and expenses here." }),
+      canWrite() ? h("button", { type: "button", class: "primary", text: "New journal entry", onclick: () => openView("journal", () => renderJournal(1, true)) }) : null);
+  }
+  const W = 640, H = 230, pad = { l: 86, r: 10, t: 10, b: 32 };
   const max = Math.max(1, ...data.flatMap((d) => [Number(d.revenue), Number(d.expenses)]));
   const plotW = W - pad.l - pad.r, plotH = H - pad.t - pad.b;
   const svg = svgEl("svg", { class: "chart", viewBox: `0 0 ${W} ${H}`, role: "img", width: "100%",
@@ -531,7 +617,7 @@ function barChart(data) {
   for (let i = 0; i <= 4; i++) {
     const y = pad.t + plotH - (plotH * i) / 4;
     svg.append(svgEl("line", { class: "axis", x1: pad.l, x2: W - pad.r, y1: y, y2: y }));
-    svg.append(svgEl("text", { x: pad.l - 6, y: y + 4, "text-anchor": "end" }, fmt((max * i) / 4).replace(/\.00$/, "")));
+    svg.append(svgEl("text", { x: pad.l - 6, y: y + 4, "text-anchor": "end" }, `${BASE_CURRENCY} ${Math.round((max * i) / 4).toLocaleString("en-US")}`));
   }
   const group = plotW / data.length, bar = Math.min(26, group / 3);
   data.forEach((d, i) => {
@@ -540,34 +626,95 @@ function barChart(data) {
       const height = (value / max) * plotH;
       svg.append(svgEl("rect", { class: `bar-${cls}`, x: x + dx, y: pad.t + plotH - height, width: bar, height }));
     });
-    svg.append(svgEl("text", { x, y: H - 8, "text-anchor": "middle" }, d.period));
+    const periodDate = new Date(`${d.period}-01T12:00:00`);
+    const periodLabel = Number.isNaN(periodDate.getTime()) ? d.period : periodDate.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+    svg.append(svgEl("text", { class: "chart-axis-label", x, y: H - 8, "text-anchor": "middle" }, periodLabel));
   });
   return svg;
 }
 
 async function renderDashboard() {
-  const s = await api("/dashboard/summary");
-  const kpi = (label, value, extra = "") =>
-    h("div", { class: "kpi" }, h("div", { class: "label", text: label }), h("div", { class: "value", text: value }), extra);
+  const [s, period, accounts, invoices, entries] = await Promise.all([
+    api("/dashboard/summary"),
+    api("/accounting-period"),
+    api("/accounts?page=1&page_size=1"),
+    api("/invoices?page=1&page_size=1"),
+    api("/journal-entries?page=1&page_size=1"),
+  ]);
+  const formatBase = (value) => `${BASE_CURRENCY} ${fmt(value)}`;
+  const periodDate = new Date(`${period.period}-01T12:00:00`);
+  const periodLabel = Number.isNaN(periodDate.getTime()) ? period.period : periodDate.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+  const kpi = (label, value, detail, glyph, tone = "") =>
+    h("article", { class: `kpi ${tone}` },
+      h("div", { class: "kpi-top" }, h("div", { class: "label", text: label }), h("span", { class: "kpi-icon", "aria-hidden": "true" }, glyph)),
+      h("div", { class: "value tabular-nums", text: value }),
+      h("p", { class: "kpi-detail", text: detail }));
+  const steps = [
+    { title: "Chart of accounts", detail: "Review the accounts available for posting.", complete: accounts.total > 0, action: "Open accounts", onClick: () => go("accounts") },
+    { title: "First invoice", detail: "Create and issue the first customer invoice.", complete: invoices.total > 0, action: "New invoice", onClick: () => openView("invoices", () => renderInvoices(1, "", true)) },
+    { title: "First journal entry", detail: "Post a balanced debit-and-credit entry.", complete: entries.total > 0, action: "New journal entry", onClick: () => openView("journal", () => renderJournal(1, true)) },
+  ];
+  const completed = steps.filter((step) => step.complete).length;
   return h("div", {},
-    h("div", { class: "head" }, h("h2", { text: "Dashboard" })),
+    h("div", { class: "head dashboard-head" },
+      h("div", {}, h("h2", { text: "Dashboard" }),
+        h("div", { class: "dashboard-context" },
+          h("span", { class: "context-pill", text: `Period: ${periodLabel} · ${period.status === "OPEN" ? "Open" : "Closed"}` }),
+          h("span", { class: "context-pill", text: `Base currency: ${BASE_CURRENCY}` }))),
+      h("div", { class: "actions" },
+        canWrite() ? h("button", { type: "button", class: "secondary", text: "New invoice", onclick: () => openView("invoices", () => renderInvoices(1, "", true)) }) : null,
+        canWrite() ? h("button", { type: "button", class: "primary", text: "New journal entry", onclick: () => openView("journal", () => renderJournal(1, true)) }) : null)),
+    completed < steps.length ? h("section", { class: "panel onboarding", "aria-labelledby": "setup-title" },
+      h("div", { class: "onboarding-head" }, h("div", {}, h("span", { class: "eyebrow", text: "Getting started" }), h("h3", { id: "setup-title", text: "Set up your accounting workspace" })), h("span", { class: "onboarding-progress", text: `${completed} of 3 complete` })),
+      h("ol", { class: "setup-steps" }, ...steps.map((step, index) => h("li", { class: step.complete ? "setup-step complete" : "setup-step" },
+        h("span", { class: "setup-number", text: step.complete ? "✓" : String(index + 1), "aria-label": step.complete ? "Complete" : `Step ${index + 1}` }),
+        h("div", { class: "setup-copy" }, h("strong", { text: step.title }), h("p", { class: "muted", text: step.detail }),
+          step.complete ? h("span", { class: "step-complete", text: "Completed" }) : canWrite() ? h("button", { type: "button", class: "text-action", text: step.action, onclick: step.onClick }) : h("span", { class: "muted step-restricted", text: "Requires Accountant or CFO access" })))))) : null,
     h("div", { class: "kpis" },
-      kpi("Cash", fmt(s.cash)),
-      kpi("Receivables", fmt(s.accounts_receivable)),
-      kpi("Net income", fmt(s.net_income)),
-      kpi("Overdue invoices", String(s.overdue_invoices))),
+      kpi("Cash", formatBase(s.cash), "Bank + cash accounts", "¤"),
+      kpi("Receivables", formatBase(s.accounts_receivable), "Unpaid customer balances", "↗"),
+      kpi("Net income", formatBase(s.net_income), "Revenue less expenses", "∑"),
+      kpi("Overdue invoices", String(s.overdue_invoices), "Invoices past their due date", "!", Number(s.overdue_invoices) > 0 ? "warning" : "")),
     h("div", { class: "panel" },
       h("h3", { text: "Revenue and expenses, last 6 months" }),
       barChart(s.monthly),
       h("div", { class: "legend" },
         h("span", {}, h("i", { class: "swatch rev" }), "Revenue"),
         h("span", {}, h("i", { class: "swatch exp" }), "Expenses"))),
-    h("p", { class: "muted", text: s.balance_sheet_balanced
+    h("p", { class: s.balance_sheet_balanced ? "ledger-summary" : "ledger-summary bad", text: s.balance_sheet_balanced
       ? "Accounting equation holds: assets = liabilities + equity."
-      : "Accounting equation does NOT hold. Investigate immediately." }));
+      : "Accounting equation does NOT hold. Review the trial balance before posting more entries." }));
 }
 
 /* ---------- journal ---------- */
+async function openView(view, renderer) {
+  state.view = view;
+  const navigationId = ++state.navigationId;
+  const selectedView = VIEWS.find(([id]) => id === view);
+  $("#current-location").textContent = selectedView?.[1] ?? "Workspace";
+  for (const button of document.querySelectorAll("#nav button")) {
+    if (button.dataset.view === view) button.setAttribute("aria-current", "page");
+    else button.removeAttribute("aria-current");
+  }
+  setMobileNav(false);
+  const root = $("#view");
+  root.setAttribute("aria-busy", "true");
+  try {
+    const content = await renderer();
+    if (navigationId !== state.navigationId) return;
+    root.replaceChildren(content);
+    viewCache.set(view, { node: content, updatedAt: Date.now() });
+    if (typeof content.activate === "function") content.activate();
+    root.focus();
+    $("#last-updated").textContent = `Updated ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+  } catch (err) {
+    if (navigationId === state.navigationId) toast(err.message, "bad");
+  } finally {
+    if (navigationId === state.navigationId) root.setAttribute("aria-busy", "false");
+  }
+  refreshProof();
+}
+
 const swap = async (promise) => {
   const navigationId = state.navigationId;
   const view = state.view;
@@ -704,7 +851,7 @@ function invoiceForm(onDone) {
   return form;
 }
 
-async function renderInvoices(page = 1, status = "") {
+async function renderInvoices(page = 1, status = "", showForm = false) {
   const query = `/invoices?page=${page}&page_size=10${status ? `&status=${status}` : ""}`;
   const data = await api(query);
   const filter = h("select", { "aria-label": "Filter by status", onchange: (e) => swap(renderInvoices(1, e.target.value)) },
@@ -715,6 +862,7 @@ async function renderInvoices(page = 1, status = "") {
     if (formSlot.firstChild) formSlot.replaceChildren();
     else formSlot.replaceChildren(invoiceForm(() => swap(renderInvoices(1))));
   } });
+  if (showForm && canWrite()) toggle.click();
   const rows = data.items.map((i) => h("tr", {},
     td(h("strong", { text: i.invoice_number })),
     td(i.client_name),
