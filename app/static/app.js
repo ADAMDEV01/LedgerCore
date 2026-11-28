@@ -659,7 +659,7 @@ async function renderDashboard() {
     h("div", { class: "head dashboard-head" },
       h("div", {}, h("h2", { text: "Dashboard" }),
         h("div", { class: "dashboard-context" },
-          h("span", { class: "context-pill", text: `Period: ${periodLabel} · ${period.status}` }),
+          h("span", { class: "context-pill", text: `Period: ${periodLabel} · ${period.status === "OPEN" ? "Open" : "Closed"}` }),
           h("span", { class: "context-pill", text: `Base currency: ${BASE_CURRENCY}` }))),
       h("div", { class: "actions" },
         canWrite() ? h("button", { type: "button", class: "secondary", text: "New invoice", onclick: () => openView("invoices", () => renderInvoices(1, "", true)) }) : null,
